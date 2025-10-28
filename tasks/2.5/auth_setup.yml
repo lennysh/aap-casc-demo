@@ -1,0 +1,24 @@
+---
+- name: Set fact to clear token when done
+  ansible.builtin.set_fact:
+    __clear_token: true
+  tags:
+    - always
+
+- name: Create a new token using gateway username/password
+  ansible.platform.token:
+    description: 'Creating temporary token for aap-demo-lab'
+    scope: "write"
+    state: present
+    aap_hostname: "{{ aap_hostname }}"
+    aap_username: "{{ aap_username }}"
+    aap_password: "{{ aap_password }}"
+    aap_validate_certs: "{{ aap_validate_certs }}"
+  vars:
+    aap_username: "{{ vault_aap_username | default(lookup('env', 'AAP_USERNAME')) }}"
+    aap_password: "{{ vault_aap_password | default(lookup('env', 'AAP_PASSWORD')) }}"
+  register: authtoken_res
+  changed_when: false
+  tags:
+    - always
+...

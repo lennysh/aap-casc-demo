@@ -1,0 +1,10 @@
+vault*
+temp/
+ansible.cfg
+ansible-navigator.*
+*artifact*.json
+**/ignore_*
+**/aapexport_*
+
+**/.vscode
+**/.ansible

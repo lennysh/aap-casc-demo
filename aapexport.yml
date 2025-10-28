@@ -1,0 +1,31 @@
+---
+- name: Dump config from AAP
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    secrets_as_variables: true
+    aap_hostname: "{{ vault_aap_hostname | default(lookup('env', 'AAP_HOST')) }}"
+    aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VERIFY_SSL')) }}"
+    flatten_output: true
+
+  pre_tasks:
+    - name: Authentication | Setup
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/auth_setup.yml"
+      when: vault_aap_token is not defined
+      tags:
+        - always
+
+  tasks:
+    - name: Include Tasks for AAP {{ casc_aap_version }}
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/read.yml"
+      tags:
+        - always
+
+  post_tasks:
+    - name: Authentication | Clear
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/auth_clear.yml"
+      when: __clear_token | default(false)
+      tags:
+        - always
+...

@@ -1,0 +1,76 @@
+---
+execution_environment: "quay.io/lshirley/ansible-automation-platform-24/ee-casc-rhel9"
+
+aapexport_specific_tags:
+  Controller:
+    - applications
+    - credentials
+    - credential_types
+    - execution_environments
+    - groups
+    - hosts
+    - inventory
+    - inventory_sources
+    - instance_groups
+    - job_templates
+    - labels
+    - notification_templates
+    - organizations
+    - projects
+    - roles
+    - schedules
+    - settings
+    - teams
+    - users
+    - workflow_job_templates
+
+aapupdate_specific_tags:
+  Controller:
+    - applications
+    - credential_input_sources
+    - credential_types
+    - credentials
+    - execution_environments
+    - groups
+    - hosts
+    - instance_groups
+    - inventories
+    - inventory_sources
+    - job_templates
+    - labels
+    - notifications
+    - notification_templates
+    - organizations
+    - projects
+    - roles
+    - schedules
+    - settings
+    - teams
+    - users
+    - workflow_job_templates
+
+aapdiff_specific_tags:
+  Controller:
+    - applications
+    - credential_input_sources
+    - credential_types
+    - credentials
+    - execution_environments
+    - groups
+    - hosts
+    - instance_groups
+    - inventories
+    - inventory_sources
+    - job_templates
+    - labels
+    - notifications
+    - notification_templates
+    - organizations
+    - projects
+    - roles
+    - schedules
+    - settings
+    - teams
+    - users
+    - workflow_job_templates
+...

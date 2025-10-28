@@ -1,0 +1,32 @@
+---
+- name: Configure AAP
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aap_configuration_async_delay: 5
+    aap_configuration_async_retries: 60
+    aap_configuration_secure_logging: false
+    aap_hostname: "{{ vault_aap_hostname | default(lookup('env', 'AAP_HOST')) }}"
+    aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VERIFY_SSL')) }}"
+
+  pre_tasks:
+    - name: Authentication | Setup
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/auth_setup.yml"
+      when: vault_aap_token is not defined
+      tags:
+        - always
+
+  tasks:
+    - name: Include Tasks for AAP {{ casc_aap_version }}
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/import.yml"
+      tags:
+        - always
+
+  post_tasks:
+    - name: Authentication | Clear
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/auth_clear.yml"
+      when: __clear_token | default(false)
+      tags:
+        - always
+...

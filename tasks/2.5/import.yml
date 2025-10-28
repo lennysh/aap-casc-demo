@@ -1,0 +1,17 @@
+---
+- name: Set some facts for AAP {{ casc_aap_version }}
+  when: aap_token is undefined
+  ansible.builtin.set_fact:
+    aap_token: "{{ vault_aap_token }}"
+  tags:
+    - always
+
+- name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
+  ansible.builtin.include_vars:
+    dir: "{{ vars_dir }}"
+    ignore_unknown_extensions: true
+
+- name: Dispatch for AAP {{ casc_aap_version }}
+  ansible.builtin.import_role:
+    name: infra.aap_configuration.dispatch
+...
