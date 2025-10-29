@@ -1,6 +1,7 @@
 vault.yml
 .vault_pass
 temp/
+ansible.cfg
 ansible-navigator.*
 *artifact*.json
 **/ignore_*
