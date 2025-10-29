@@ -9,18 +9,18 @@
 
 ## 📖 Table of Contents
 
-* [🧐 What is This Tool?](#-what-is-this-tool)
-* [✨ Why Use "Configuration as Code" (CaSC)?](#-why-use-configuration-as-code-casc)
-* [🚀 Core Features](#-core-features)
-* [⚙️ How It Works](#-how-it-works)
-* [🛠️ Prerequisites](#-prerequisites)
-* [🏁 Step 1: Setup & Configuration](#-step-1-setup--configuration)
-* [👟 Step 2: Usage / Examples](#-step-2-usage--examples)
+* 🧐 [What is This Tool?](#-what-is-this-tool)
+* ✨ [Why Use "Configuration as Code" (CaSC)?](#-why-use-configuration-as-code-casc)
+* 🚀 [Core Features](#-core-features)
+* ⚙️ [How It Works](#-how-it-works)
+* 🛠️ [Prerequisites](#-prerequisites)
+* 🏁 [Step 1: Setup & Configuration](#-step-1-setup--configuration)
+* 👟 [Step 2: Usage / Examples](#-step-2-usage--examples)
     * [Exporting Configuration](#exporting-configuration)
     * [Importing Configuration](#importing-configuration)
-* [💡 Tips and Advanced Usage](#-tips-and-advanced-usage)
-* [📦 Supported AAP Versions](#-supported-aap-versions)
-* [📜 License](#-license)
+* 💡 [Tips and Advanced Usage](#-tips-and-advanced-usage)
+* 📦 [Supported AAP Versions](#-supported-aap-versions)
+* 📜 [License](#-license)
 
 ---
 
