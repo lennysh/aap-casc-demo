@@ -182,32 +182,30 @@ This command reads from your local files and configures your AAP instance.
 
 ## 💡 Tips and Advanced Usage
 
-> ### Avoid Typing Your Vault Password
->
-> By default, these scripts will securely prompt you for your vault password every time they run.
->
-> If you are in a trusted environment and want to avoid this, you can tell Ansible where to find your password in a file.
->
-> 1.  Create a simple text file containing *only* your vault password (e.g., `.vault_pass.txt`).
->
-> 2.  **Secure this file:** `chmod 600 .vault_pass.txt`
->
-> 3.  **Tell Ansible to use it.** You have two common options:
->
->       * **Option 1 (Environment Variable):** Set an environment variable in your `.bashrc` or `.zshrc`:
->
->         ```bash
->         export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass.txt
->         ```
->
->       * **Option 2 (`ansible.cfg`):** Create a file named `ansible.cfg` (or `cp ansible.cfg.example ansible.cfg`) in this repository's root directory with the following content:
->
->         ```ini
->         [defaults]
->         vault_password_file = .vault_pass.txt
->         ```
->
-> 4.  **Important:** If you create this `ansible.cfg` file, make sure to add it to your `.gitignore` file so you don't accidentally commit it\!
+### Avoid Typing Your Vault Password
+By default, these scripts will securely prompt you for your vault password every time they run.
+
+If you are in a trusted environment and want to avoid this, you can tell Ansible where to find your password in a file.
+1.  Create a simple text file containing *only* your vault password (e.g., `.vault_pass.txt`).
+
+2.  **Secure this file:** `chmod 600 .vault_pass.txt`
+
+3.  **Tell Ansible to use it.** You have two common options:
+
+      * **Option 1 (Environment Variable):** Set an environment variable in your `.bashrc` or `.zshrc`:
+
+        ```bash
+         export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass.txt
+        ```
+
+      * **Option 2 (`ansible.cfg`):** Create a file named `ansible.cfg` (or `cp ansible.cfg.example ansible.cfg`) in this repository's root directory with the following content:
+
+        ```ini
+        [defaults]
+        vault_password_file = .vault_pass.txt
+        ```
+
+4.  **Important:** If you create this `ansible.cfg` file, make sure to add it to your `.gitignore` file so you don't accidentally commit it\!
 
 ## 📦 Supported AAP Versions
 
