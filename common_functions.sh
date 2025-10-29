@@ -72,8 +72,8 @@ initialize_and_validate() {
     # --- Tag Validation Section ---
     if [ -n "$tags" ]; then
         # Build the yq query keys dynamically based on the script type
-        local category_tags_key="aap${script_type}_category_tags"
-        local specific_tags_key="aap${script_type}_specific_tags"
+        local category_tags_key="${script_type}_category_tags"
+        local specific_tags_key="${script_type}_specific_tags"
 
         declare -A valid_tags_map
         while IFS= read -r tag; do

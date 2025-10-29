@@ -34,7 +34,7 @@ usage() {
 }
 
 # --- Initialize and Validate ---
-# Pass "update" to build the correct yq keys, and pass all script arguments with "$@"
+# Pass "import" to build the correct yq keys, and pass all script arguments with "$@"
 initialize_and_validate "import" "$@"
 
 # --- Build and Execute Command ---

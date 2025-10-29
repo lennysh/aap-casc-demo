@@ -182,7 +182,7 @@ This command reads from your local files and configures your AAP instance.
 
 ## 💡 Tips and Advanced Usage
 
-> ## Avoid Typing Your Vault Password
+> ### Avoid Typing Your Vault Password
 >
 > By default, these scripts will securely prompt you for your vault password every time they run.
 >
@@ -200,7 +200,7 @@ This command reads from your local files and configures your AAP instance.
 >         export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass.txt
 >         ```
 >
->       * **Option 2 (`ansible.cfg`):** Create a file named `ansible.cfg` in this repository's root directory with the following content:
+>       * **Option 2 (`ansible.cfg`):** Create a file named `ansible.cfg` (or `cp ansible.cfg.example ansible.cfg`) in this repository's root directory with the following content:
 >
 >         ```ini
 >         [defaults]
