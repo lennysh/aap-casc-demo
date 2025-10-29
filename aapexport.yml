@@ -8,6 +8,7 @@
     aap_hostname: "{{ vault_aap_hostname | default(lookup('env', 'AAP_HOST')) }}"
     aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VERIFY_SSL')) }}"
     flatten_output: true
+    organization: ''
 
   pre_tasks:
     - name: Authentication | Setup
