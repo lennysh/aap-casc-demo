@@ -21,7 +21,8 @@
 
 - name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
   ansible.builtin.include_vars:
-    dir: flat_vars/{{ casc_aap_version }}/
+    dir: "{{ vars_dir }}"
+    ignore_unknown_extensions: true
 
 - name: "Set Data Structures for: {{ controller_configuration_dispatcher_var_changes | map(attribute='old_var') | join(', ') }}"
   ansible.builtin.set_fact:

@@ -11,9 +11,10 @@
   tags:
     - always
 
-- name: FileTree Read for AAP {{ casc_aap_version }}
-  ansible.builtin.import_role:
-    name: infra.controller_configuration.filetree_read
+- name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
+  ansible.builtin.include_vars:
+    dir: "{{ vars_dir }}"
+    ignore_unknown_extensions: true
 
 - name: Dispatch for AAP {{ casc_aap_version }}
   ansible.builtin.import_role:
