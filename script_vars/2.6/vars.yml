@@ -1,14 +1,14 @@
 ---
 execution_environment: "quay.io/lshirley/ansible-automation-platform-26/ee-casc-rhel9"
 
-aapexport_category_tags:
+export_category_tags:
   - controller
   - gateway
   - eda
   - hub
   - roles
 
-aapexport_specific_tags:
+export_specific_tags:
   Controller:
     - controller_applications
     - controller_credentials
@@ -59,7 +59,7 @@ aapexport_specific_tags:
     - hub_namespaces
     - hub_roles
 
-aapupdate_specific_tags:
+import_specific_tags:
   Controller:
     - credential_input_sources
     - credential_types
@@ -94,29 +94,4 @@ aapupdate_specific_tags:
     - services
     - teams
     - users
-
-aapdiff_specific_tags:
-  Controller:
-    - applications
-    - credential_input_sources
-    - credential_types
-    - credentials
-    - execution_environments
-    - groups
-    - hosts
-    - instance_groups
-    - inventories
-    - inventory_sources
-    - job_templates
-    - labels
-    - notifications
-    - notification_templates
-    - organizations
-    - projects
-    - roles
-    - schedules
-    - settings
-    - teams
-    - users
-    - workflow_job_templates
 ...

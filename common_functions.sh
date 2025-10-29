@@ -14,7 +14,7 @@ initialize_and_validate() {
 
     # --- Initial Argument Validation ---
     if [[ $# -lt 2 ]]; then
-        echo "Error: Missing organization and/or environment arguments."
+        echo "Error: Missing AAP Version and/or environment arguments."
         echo ""
         usage # Calls the usage() function defined in the parent script
     fi
@@ -30,7 +30,7 @@ initialize_and_validate() {
         echo ""
         local available_envs
         available_envs=$(find "$env_dir" -mindepth 1 -maxdepth 1 -type d -not -name "common" -printf "%f|" | sed 's/|$//')
-        echo "Available environments for '$org': {$available_envs}"
+        echo "Available environments: {$available_envs}"
         exit 1
     fi
 

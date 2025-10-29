@@ -53,9 +53,9 @@ If you're new to CaSC, here's why it's so powerful:
 
 ## ⚙️ How It Works
 
-This tool provides two main wrapper scripts, `aapexport.sh` and `aapimport.sh`, which are the easiest way to get started.
+This tool provides two main wrapper scripts, `export.sh` and `import.sh`, which are the easiest way to get started.
 
-These scripts are user-friendly wrappers for the underlying Ansible playbooks (`aapexport.yml` and `aapimport.yml`). They automatically:
+These scripts are user-friendly wrappers for the underlying Ansible playbooks (`export.yml` and `import.yml`). They automatically:
 1.  Read your environment's credentials.
 2.  Validate your command-line tags.
 3.  Run the correct Ansible playbook using **`ansible-navigator`**.
@@ -121,17 +121,17 @@ Before you begin, you **must** have the following tools installed on your local 
 
 ## 👟 Step 2: Usage / Examples
 
-The two main scripts are `./aapexport.sh` and `./aapimport.sh`. You must make them executable first:
+The two main scripts are `./export.sh` and `./import.sh`. You must make them executable first:
 
 ```bash
-chmod +x aapexport.sh aapimport.sh
+chmod +x export.sh import.sh
 ```
 
 ### Exporting Configuration
 
 This command reads from your AAP instance and saves the files locally.
 
-* **Command:** `./aapexport.sh <aap_version> <environment_name> [options]`
+* **Command:** `./export.sh <aap_version> <environment_name> [options]`
 * **Arguments:**
     * `<aap_version>`: The version of your AAP instance (e.g., `2.6`).
     * `<environment_name>`: The name of your config directory (e.g., `my_prod`).
@@ -141,7 +141,7 @@ This command reads from your AAP instance and saves the files locally.
 
 **Example: Export only Projects and Credentials from a 2.6 instance**
 ```bash
-./aapexport.sh 2.6 my_prod -t "controller_projects,controller_credentials"
+./export.sh 2.6 my_prod -t "controller_projects,controller_credentials"
 ```
 * **What this does:**
     1.  Reads connection details from `aap_vars/my_prod/vault.yml`.
@@ -155,7 +155,7 @@ This command reads from your AAP instance and saves the files locally.
 
 This command reads from your local files and configures your AAP instance.
 
-* **Command:** `./aapimport.sh <aap_version> <environment_name> [options]`
+* **Command:** `./import.sh <aap_version> <environment_name> [options]`
 * **Arguments:**
     * `<aap_version>`: The version of your AAP instance (e.g., `2.6`).
     * `<environment_name>`: The name of your config directory (e.g., `my_prod`).
@@ -169,12 +169,12 @@ This command reads from your local files and configures your AAP instance.
     ```bash
     # (Assuming you already exported)
     # mkdir -p aap_vars/my_prod/imports
-    # cp aap_vars/my_prod/exports/aapexport.../controller_projects.yml aap_vars/my_prod/imports/
+    # cp aap_vars/my_prod/exports/export.../controller_projects.yml aap_vars/my_prod/imports/
     ```
 
 2.  **Run the import script:**
     ```bash
-    ./aapimport.sh 2.6 my_prod -t "controller_projects"
+    ./import.sh 2.6 my_prod -t "controller_projects"
     ```
 * **What this does:**
     1.  Reads connection details from `aap_vars/my_prod/vault.yml`.
@@ -186,7 +186,7 @@ This command reads from your local files and configures your AAP instance.
 >
 > The available tags are different for each AAP version. To see a full list of supported tags, run the script with just the version number:
 > ```bash
-> ./aapexport.sh 2.6
+> ./export.sh 2.6 <environment_name>
 > ```
 > This will show the `Usage:` help text, which lists all valid tags for both exporting and importing.
 

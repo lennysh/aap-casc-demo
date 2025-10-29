@@ -14,20 +14,19 @@ usage() {
     echo "Usage: $0 <aap version> <env> [-a|--all] [-t|--tags <tags>]"
     echo ""
 
+    if [[ -z "$casc_aap_version_context" ]]; then
+        exit 1
+    fi
+
     if [[ ! -f "$script_vars_file" ]]; then
         echo "Warning: Tag definition file not found for version '$casc_aap_version_context'."
         exit 1
     fi
-
-    if yq -e '.aapexport_category_tags' "$script_vars_file" >/dev/null; then
-        echo "Category Tags: $(yq '.aapexport_category_tags | join(", ")' "$script_vars_file")"
-        echo ""
-    fi
     
     echo "Specific Tags Supported:"
-    yq '(.aapexport_specific_tags | keys)[]' "$script_vars_file" | while read -r category; do
+    yq '(.import_specific_tags | keys)[]' "$script_vars_file" | while read -r category; do
         echo "  $category:"
-        tags=$(yq ".aapexport_specific_tags[\"$category\"] | join(\", \")" "$script_vars_file")
+        tags=$(yq ".import_specific_tags[\"$category\"] | join(\", \")" "$script_vars_file")
         echo "    $tags" | fold -s -w 70 | sed 's/^/    /' | sed '1s/    //'
         echo ""
     done
@@ -35,24 +34,21 @@ usage() {
 }
 
 # --- Initialize and Validate ---
-# Pass "read" to build the correct yq keys, and pass all script arguments with "$@"
-initialize_and_validate "export" "$@"
+# Pass "update" to build the correct yq keys, and pass all script arguments with "$@"
+initialize_and_validate "import" "$@"
 
 # --- Build and Execute Command ---
-dest_folder="aapexport_$(date +%Y%m%d_%H%M%S)"
 cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; }
 
 playbook_args=(
-    "aapexport.yml"
+    "import.yml"
     "-e" "casc_aap_version=$casc_aap_version"
-    "-e" "{output_path: $parent_dir/aap_vars/$env/exports/$dest_folder}"
+    "-e" "{vars_dir: $parent_dir/aap_vars/$env/imports}"
     "-e" "@$parent_dir/aap_vars/$env/vault.yml"
 )
 
 if [ -n "$tags" ]; then
-    quoted_tags="\"${tags//,/'","'}\""
-    extra_vars=$(printf '{"input_tag": [%s]}' "$quoted_tags")
-    playbook_args+=("-e" "$extra_vars")
+    playbook_args+=("--tags" "$tags")
 fi
 
 echo "Running playbook for AAP version: $casc_aap_version"

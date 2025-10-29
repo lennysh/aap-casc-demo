@@ -1,0 +1,18 @@
+---
+# The full URL of your AAP instance
+vault_aap_hostname: "aap.mycompany.com"
+
+# Set to 'false' if you are using self-signed certificates
+vault_aap_validate_certs: true
+
+# --- Authentication (Choose ONE) ---
+
+# Option 1: Username / Password (Recommended)
+# The tool will create a temporary token and delete it afterward
+vault_aap_username: "my_admin_user"
+vault_aap_password: "my_secret_password"
+
+# Option 2: Pre-generated OAuth2 Token
+# If you use this, comment out the username/password above
+# vault_aap_token: "aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890"
+...

@@ -10,25 +10,29 @@ usage() {
     exit 1
 }
 
+base_dir="$parent_dir/aap_vars"
+
 # --- Initial Argument Validation ---
 # Ensure the two mandatory arguments are provided.
 if [[ $# -lt 1 ]]; then
     echo "Error: Missing environment argument."
     echo ""
+    # List available environments for the given organization.
+    available_envs=$(find "$base_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
+    echo "Available environments: {$available_envs}"
     usage
 fi
 
 env=$1
-base_dir="$parent_dir/aap_vars"
 
 # --- Validate Environment ---
 # Check if the environment exists and is not the 'common' directory.
 if [[ ! -d "$base_dir/$env" ]]; then
-    echo "Error: Environment '$env' not found or is invalid for organization '$org'."
+    echo "Error: Environment '$env' not found or is invalid."
     echo ""
     # List available environments for the given organization.
     available_envs=$(find "$base_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
-    echo "Available environments for '$org': {$available_envs}"
+    echo "Available environments: {$available_envs}"
     exit 1
 fi
 
