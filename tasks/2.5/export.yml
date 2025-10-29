@@ -8,7 +8,9 @@
 
 - name: FileTree Create for AAP {{ casc_aap_version }}
   vars:
-    aap_oauthtoken: "{{ aap_token | default(vault_aap_token) }}"
+    aap_oauthtoken: "{{ aap_token }}"
   ansible.builtin.import_role:
     name: infra.aap_configuration_extended.filetree_create
+  tags:
+    - always
 ...

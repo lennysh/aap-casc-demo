@@ -3,6 +3,11 @@
   when: aap_token is undefined
   ansible.builtin.set_fact:
     aap_token: "{{ vault_aap_token }}"
+  tags:
+    - always
+
+- name: Set some more facts for AAP {{ casc_aap_version }}
+  ansible.builtin.set_fact:
     controller_configuration_dispatcher_var_changes:
       - old_var: controller_organizations
         new_var: aap_organizations

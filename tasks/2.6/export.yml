@@ -1,7 +1,16 @@
 ---
+- name: Set some facts for AAP {{ casc_aap_version }}
+  when: aap_token is undefined
+  ansible.builtin.set_fact:
+    aap_token: "{{ vault_aap_token }}"
+  tags:
+    - always
+
 - name: FileTree Create for AAP {{ casc_aap_version }}
-  ansible.builtin.import_role:
-    name: infra.aap_configuration_extended.filetree_create
   vars:
     aap_oauthtoken: "{{ aap_token }}"
+  ansible.builtin.import_role:
+    name: infra.aap_configuration_extended.filetree_create
+  tags:
+    - always
 ...
