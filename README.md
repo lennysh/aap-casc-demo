@@ -56,8 +56,8 @@ If you're new to CaSC, here's why it's so powerful:
 This tool provides two main wrapper scripts, `export.sh` and `import.sh`, which are the easiest way to get started.
 
 These scripts are user-friendly wrappers for the underlying Ansible playbooks (`export.yml` and `import.yml`). They automatically:
-1.  Read your environment's credentials.
-2.  Validate your command-line tags.
+1.  Read your environment's credentials from an encrypted Ansible Vault.
+2.  Validate your command-line tags against a version-specific list.
 3.  Run the correct Ansible playbook using **`ansible-navigator`**.
 4.  Use a pre-built **Execution Environment (EE)** to ensure all the right Ansible collections and dependencies are present.
 
@@ -82,41 +82,27 @@ Before you begin, you **must** have the following tools installed on your local 
     cd aap-casc-migration
     ```
 
-2.  **Create your Environment Configuration:**
-    This tool is designed to manage multiple environments (e.g., `dev`, `test`, `prod`). You must create a directory for your environment inside `aap_vars/`.
+2.  **Run the Initialization Script:**
+    This tool now includes an interactive script to get you started. Run the `start_here.sh` script and give it a name for your new environment (e.g., `my_prod`).
 
-    For this example, let's create an environment called `my_prod`:
     ```bash
-    mkdir -p aap_vars/my_prod
+    chmod +x start_here.sh
+    ./start_here.sh my_prod
     ```
 
-3.  **Create your `vault.yml` file:**
-    This is the most important step. You need to create a file at `aap_vars/my_prod/vault.yml` that tells the tool how to connect to your AAP instance.
+3.  **What This Script Does:**
+    The `start_here.sh` script automatically does the following for you:
+    * Creates the full directory structure: `aap_vars/my_prod/imports` and `aap_vars/my_prod/exports`
+    * Copies the `templates/vault_template.yml` to `aap_vars/my_prod/vault.yml`
+    * Encrypts the new `vault.yml` using `ansible-vault`. (It will ask you to create a new vault password.)
+    * Opens the new `vault.yml` in your editor so you can add your AAP hostname and credentials.
 
-    > **Note:** Despite the name `vault.yml`, the scripts currently read this as a plain YAML file. For production use, you should secure this file (e.g., using `ansible-vault` or file permissions).
+4.  **(Optional) Edit Your Vault Later:**
+    If you need to edit your encrypted vault file again later, you can use the `vault-edit.sh` script:
 
-    Create the file `aap_vars/my_prod/vault.yml` with the following content:
-
-    ```aml
-    # This file stores the connection details for your 'my_prod' environment
-    
-    # The full URL of your AAP instance
-    vault_aap_hostname: "https://aap.mycompany.com"
-    
-    # Set to 'false' if you are using self-signed certificates
-    vault_aap_validate_certs: true
-    
-    # --- Authentication (Choose ONE) ---
-    
-    # Option 1: Username / Password (Recommended for first run)
-    # The tool will create a temporary token and delete it afterward
-    vault_aap_username: "my_admin_user"
-    vault_aap_password: "my_secret_password"
-    
-    # Option 2: Pre-generated OAuth2 Token
-    # If you use this, comment out the username/password above
-    # vault_aap_token: "aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890"
-    
+    ```bash
+    chmod +x vault-edit.sh
+    ./vault-edit.sh my_prod
     ```
 
 ## 👟 Step 2: Usage / Examples
@@ -144,7 +130,7 @@ This command reads from your AAP instance and saves the files locally.
 ./export.sh 2.6 my_prod -t "controller_projects,controller_credentials"
 ```
 * **What this does:**
-    1.  Reads connection details from `aap_vars/my_prod/vault.yml`.
+    1.  Reads connection details from your encrypted `aap_vars/my_prod/vault.yml`.
     2.  Connects to your AAP 2.6 instance.
     3.  Runs the export playbook with the tags `controller_projects` and `controller_credentials`.
     4.  Saves the resulting YAML files into a new, timestamped directory like `aap_vars/my_prod/exports/aapexport_20251028_193000/`.
@@ -168,8 +154,7 @@ This command reads from your local files and configures your AAP instance.
 1.  **First, copy your config files:** Before you can import, you must place your configuration files into the `imports` directory for your environment.
     ```bash
     # (Assuming you already exported)
-    # mkdir -p aap_vars/my_prod/imports
-    # cp aap_vars/my_prod/exports/export.../controller_projects.yml aap_vars/my_prod/imports/
+    # cp aap_vars/my_prod/exports/aapexport.../controller_projects.yml aap_vars/my_prod/imports/
     ```
 
 2.  **Run the import script:**
@@ -177,18 +162,22 @@ This command reads from your local files and configures your AAP instance.
     ./import.sh 2.6 my_prod -t "controller_projects"
     ```
 * **What this does:**
-    1.  Reads connection details from `aap_vars/my_prod/vault.yml`.
+    1.  Reads connection details from your encrypted `aap_vars/my_prod/vault.yml`.
     2.  Connects to your AAP 2.6 instance.
     3.  Runs the import playbook, which reads configuration files from `aap_vars/my_prod/imports/`.
     4.  Applies *only* the configurations found that match the `controller_projects` tag.
 
 > **💡 How to find all available tags?**
 >
-> The available tags are different for each AAP version. To see a full list of supported tags, run the script with just the version number:
+> The available tags are different for each AAP version and are now defined in the `script_vars/` directory.
+>
+> To see a full list of supported tags, run the script with a version and environment, but no options (like `-a` or `-t`).
+>
 > ```bash
-> ./export.sh 2.6 <environment_name>
+> ./export.sh 2.6 my_prod
 > ```
-> This will show the `Usage:` help text, which lists all valid tags for both exporting and importing.
+>
+> This will show the `Usage:` help text, which dynamically lists all valid tags for that version.
 
 ## 📦 Supported AAP Versions
 
