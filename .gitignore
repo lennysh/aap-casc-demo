@@ -8,3 +8,5 @@ ansible-navigator.*
 
 **/.vscode
 **/.ansible
+
+aap_vars/
