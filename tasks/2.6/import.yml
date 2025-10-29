@@ -3,12 +3,44 @@
   when: aap_token is undefined
   ansible.builtin.set_fact:
     aap_token: "{{ vault_aap_token }}"
+    controller_configuration_dispatcher_var_changes:
+      - old_var: controller_organizations
+        new_var: aap_organizations
+        results_var: __contents_filetree_controller_organizations
+      - old_var: controller_applications
+        new_var: aap_applications
+        results_var: __contents_filetree_controller_applications
+      - old_var: controller_user_accounts
+        new_var: aap_user_accounts
+        results_var: __contents_filetree_controller_user_accounts
+      - old_var: controller_teams
+        new_var: aap_teams
+        results_var: __contents_filetree_controller_teams
   tags:
     - always
 
 - name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
   ansible.builtin.include_vars:
     dir: flat_vars/{{ casc_aap_version }}/
+
+- name: "Set Data Structures for: {{ controller_configuration_dispatcher_var_changes | map(attribute='old_var') | join(', ') }}"
+  ansible.builtin.set_fact:
+    "{{ __changes.old_var }}": >-
+      {{
+        vars[__changes.results_var].results |
+        rejectattr('ansible_facts.' ~ __changes.new_var, 'undefined') |
+        map(attribute='ansible_facts.' ~ __changes.new_var) |
+        ansible.builtin.flatten
+      }}
+  when:
+    - vars[__changes.results_var] is defined
+    - vars[__changes.results_var].results is defined
+  loop: "{{ controller_configuration_dispatcher_var_changes }}"
+  loop_control:
+    loop_var: __changes
+    label: "{{ __changes.new_var }} -=> {{ __changes.old_var }}"
+  tags:
+    - always
 
 - name: Dispatch for AAP {{ casc_aap_version }}
   ansible.builtin.import_role:

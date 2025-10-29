@@ -15,25 +15,6 @@
   ansible.builtin.import_role:
     name: infra.controller_configuration.filetree_read
 
-- name: "Set Data Structures for: {{ controller_configuration_dispatcher_var_changes | map(attribute='old_var') | join(', ') }}"
-  ansible.builtin.set_fact:
-    "{{ __changes.old_var }}": >-
-      {{
-        vars[__changes.results_var].results |
-        rejectattr('ansible_facts.' ~ __changes.new_var, 'undefined') |
-        map(attribute='ansible_facts.' ~ __changes.new_var) |
-        ansible.builtin.flatten
-      }}
-  when:
-    - vars[__changes.results_var] is defined
-    - vars[__changes.results_var].results is defined
-  loop: "{{ controller_configuration_dispatcher_var_changes }}"
-  loop_control:
-    loop_var: __changes
-    label: "{{ __changes.new_var }} -=> {{ __changes.old_var }}"
-  tags:
-    - always
-
 - name: Dispatch for AAP {{ casc_aap_version }}
   ansible.builtin.import_role:
     name: infra.controller_configuration.dispatch
