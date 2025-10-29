@@ -18,7 +18,7 @@
 
   tasks:
     - name: Include Tasks for AAP {{ casc_aap_version }}
-      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/read.yml"
+      ansible.builtin.include_tasks: "tasks/{{ casc_aap_version }}/export.yml"
       tags:
         - always
 
