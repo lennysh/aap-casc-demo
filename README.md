@@ -1,4 +1,4 @@
-# AAP Configuration as Code Migration Tool
+# AAP Configuration as Code Demo
 
 > [!WARNING]
 > **🚧 Work in Progress 🚧**
@@ -79,8 +79,8 @@ Before you begin, you **must** have the following tools installed on your local 
 
 1.  **Clone this repository:**
     ```bash
-    git clone https://github.com/lennysh/aap-casc-migration.git
-    cd aap-casc-migration
+    git clone https://github.com/lennysh/aap-casc-demo.git
+    cd aap-casc-demo
     ```
 
 2.  **Run the Initialization Script:**
