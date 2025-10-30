@@ -1,0 +1,6 @@
+---
+- name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
+  ansible.builtin.include_vars:
+    dir: "{{ vars_dir }}"
+    ignore_unknown_extensions: true
+...

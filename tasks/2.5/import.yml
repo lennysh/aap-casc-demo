@@ -24,10 +24,12 @@
   tags:
     - always
 
-- name: Include Flattened Variable Files for AAP {{ casc_aap_version }}
-  ansible.builtin.include_vars:
-    dir: "{{ vars_dir }}"
-    ignore_unknown_extensions: true
+- name: Include Import Tasks for AAP {{ casc_aap_version }}
+  vars:
+    __import_type: "{{ 'flat' if flatten_output | default(false) | bool else 'filetree' }}"
+  ansible.builtin.include_tasks: "import_{{ __import_type }}.yml"
+  tags:
+    - always
 
 - name: "Set Data Structures for: {{ controller_configuration_dispatcher_var_changes | map(attribute='old_var') | join(', ') }}"
   ansible.builtin.set_fact:
