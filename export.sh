@@ -70,7 +70,7 @@ source "$parent_dir/common_functions.sh"
 initialize_and_validate "export" "$@"
 
 # --- Build and Execute Command ---
-dest_folder="aapexport_$(date +%Y%m%d_%H%M%S)"
+dest_folder="aapexport_${env,,}_$(date +%Y%m%d_%H%M%S)"
 cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; }
 
 playbook_args=(

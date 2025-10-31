@@ -52,7 +52,7 @@ initialize_and_validate() {
     tags=""
     local all=false
 
-    if [[ -z "$1" ]]; then
+    if [[ -z "${1:-}" ]]; then
         echo "Error: Missing option [-a|--all] or [-t|--tags]."
         usage "$env" # Call usage with the env to show tags
     fi
