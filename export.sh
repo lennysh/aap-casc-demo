@@ -5,20 +5,29 @@ parent_dir=$(dirname "$(readlink -f "$0")")
 script_vars_dir="$parent_dir/script_vars"
 
 # --- Main usage function ---
+# MUST be defined *before* sourcing common_functions.sh
 usage() {
-    local casc_aap_version_context=$1
-    # Use .env extension
-    local script_vars_file="$script_vars_dir/${casc_aap_version_context:-2.6}/vars.env"
-
-    echo "Usage: $0 <aap version> <env> [-a|--all] [-t|--tags <tags>]"
+    local env_context=$1
+    echo "Usage: $0 <env> [-a|--all] [-t|--tags <tags>]"
     echo ""
 
-    if [[ -z "$casc_aap_version_context" ]]; then
+    if [[ -z "$env_context" ]]; then
+        # No env provided, just exit with simple usage
         exit 1
     fi
 
+    # --- Env was provided, so try to show context-specific tags ---
+    local env_vars_file="$parent_dir/aap_vars/$env_context/vars.env"
+    if [[ ! -f "$env_vars_file" ]]; then
+        echo "Warning: Could not load vars for env '$env_context' to show available tags."
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$env_vars_file" # Loads $CASC_AAP_VERSION
+
+    local script_vars_file="$script_vars_dir/$CASC_AAP_VERSION/vars.env"
     if [[ ! -f "$script_vars_file" ]]; then
-        echo "Warning: Tag definition file not found for version '$casc_aap_version_context'."
+        echo "Warning: Tag definition file not found for version '$CASC_AAP_VERSION'."
         exit 1
     fi
 
@@ -36,29 +45,25 @@ usage() {
         echo ""
     fi
     
-    echo "Specific Tags Supported:"
+    echo "Specific Tags Supported (for AAP $CASC_AAP_VERSION):"
     for category in "${export_specific_tags_categories[@]}"; do
         echo "  $category:"
-        # Read the space-separated string into a temp array
         read -ra tags_array <<< "${export_specific_tags[$category]}"
-        
-        # Use printf to join the array with ", " after each item
         local tags_string
         tags_string=$(printf '%s, ' "${tags_array[@]}")
-        
-        # Pipe the string to fold, removing the trailing ", " from the very end
-        # The string now has spaces, so "fold -s" will work correctly
         echo "${tags_string%, }" | fold -s -w 70 | sed 's/^/    /'
-        echo "" # Add a blank line for spacing between categories
+        echo ""
     done
     exit 1
 }
 
+# Source common functions *after* usage() is defined
 # shellcheck source=common_functions.sh
 source "$parent_dir/common_functions.sh"
 
 # --- Initialize and Validate ---
-# Pass "export" to build the correct keys, and pass all script arguments with "$@"
+# Pass "export" to build the correct yq keys, and pass all script arguments with "$@"
+# common_functions.sh will parse $env and load the $CASC_AAP_VERSION from it.
 initialize_and_validate "export" "$@"
 
 # --- Build and Execute Command ---
@@ -67,7 +72,7 @@ cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; 
 
 playbook_args=(
     "export.yml"
-    "-e" "casc_aap_version=$casc_aap_version"
+    "-e" "casc_aap_version=$CASC_AAP_VERSION" # Note: $CASC_AAP_VERSION is set in common_functions.sh
     "-e" "{output_path: $parent_dir/aap_vars/$env/exports/$dest_folder}"
     "-e" "@$parent_dir/aap_vars/$env/vault.yml"
 )
@@ -78,7 +83,7 @@ if [ -n "$tags" ]; then
     playbook_args+=("-e" "$extra_vars")
 fi
 
-echo "Running playbook for AAP version: $casc_aap_version"
+echo "Running playbook for AAP version: $CASC_AAP_VERSION"
 ansible-navigator run "${playbook_args[@]}" \
     --mode stdout \
     --pae false \

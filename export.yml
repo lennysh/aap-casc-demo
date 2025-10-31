@@ -9,7 +9,7 @@
     aap_hostname: "{{ vault_aap_hostname | default(lookup('env', 'AAP_HOST')) }}"
     aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VERIFY_SSL')) }}"
     omit_id: true
-    flatten_output: true
+    flatten_output: false
     organization: ''
 
   pre_tasks:

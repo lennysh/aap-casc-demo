@@ -2,7 +2,6 @@
 
 # This function contains all the common logic for argument parsing and validation.
 # It sets the following variables for the calling script to use:
-# - org
 # - env
 # - casc_aap_version
 # - tags
@@ -15,35 +14,45 @@ initialize_and_validate() {
     shift # Remove script_type from the arguments list
 
     # --- Initial Argument Validation ---
-    if [[ $# -lt 2 ]]; then
-        echo "Error: Missing AAP Version and/or environment arguments."
+    if [[ $# -lt 1 ]]; then
+        echo "Error: Missing environment argument."
         echo ""
-        usage # Calls the usage() function defined in the parent script
+        usage # Calls the usage() function defined in the parent script (no args)
     fi
 
-    casc_aap_version=$1
-    env=$2
+    env=$1
     local base_dir="$parent_dir/aap_vars"
+    local env_dir="$base_dir/$env"
 
     # --- Validate Environment ---
-    local env_dir="$base_dir"
-    if [[ ! -d "$env_dir/$env" ]]; then
+    if [[ ! -d "$env_dir" ]]; then
         echo "Error: Environment '$env' not found or is invalid."
         echo ""
         local available_envs
-        available_envs=$(find "$env_dir" -mindepth 1 -maxdepth 1 -type d -not -name "common" -printf "%f|" | sed 's/|$//')
+        available_envs=$(find "$base_dir" -mindepth 1 -maxdepth 1 -type d -not -name "common" -printf "%f|" | sed 's/|$//')
         echo "Available environments: {$available_envs}"
         exit 1
     fi
 
+    # --- Source Environment Vars ---
+    local env_vars_file="$env_dir/vars.env"
+    if [[ ! -f "$env_vars_file" ]]; then
+        echo "Error: Environment config file '$env_vars_file' not found."
+        echo "This file should contain the CASC_AAP_VERSION for this environment."
+        echo "Try running './start_here.sh $env' again to fix it."
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$env_vars_file" # This loads $CASC_AAP_VERSION
+
     # --- Argument Parsing ---
-    shift 2 # Remove org and env from the argument list
+    shift 1 # Remove env from the argument list
     tags=""
     local all=false
 
     if [[ -z "$1" ]]; then
         echo "Error: Missing option [-a|--all] or [-t|--tags]."
-        usage "$casc_aap_version"
+        usage "$env" # Call usage with the env to show tags
     fi
 
     case $1 in
@@ -55,19 +64,19 @@ initialize_and_validate() {
                 tags="$2"
             else
                 echo "Error: --tags requires an argument."
-                usage "$casc_aap_version"
+                usage "$env" # Call usage with the env to show tags
             fi
             ;;
         *)
             echo "Unknown option: $1"
-            usage "$casc_aap_version"
+            usage "$env" # Call usage with the env to show tags
             ;;
     esac
 
     # --- Define the single source of truth for the script vars file ---
-    local script_vars_file="$script_vars_dir/$casc_aap_version/vars.env"
+    local script_vars_file="$script_vars_dir/$CASC_AAP_VERSION/vars.env"
     if [[ ! -f "$script_vars_file" ]]; then
-        echo "Error: Script variables file not found at $script_vars_file"
+        echo "Error: Script variables file not found for version '$CASC_AAP_VERSION' at $script_vars_file"
         exit 1
     fi
 
@@ -86,21 +95,20 @@ initialize_and_validate() {
             valid_tags_map["$tag"]=1
         done
 
-        # 2. Load specific tags using namerefs for categories and the associative array
+        # 2. Load specific tags using namerefs
         local category_keys_name="${script_type}_specific_tags_categories"
         local assoc_array_name="${script_type}_specific_tags"
         declare -n category_keys_ref=$category_keys_name
         declare -n assoc_array_ref=$assoc_array_name
 
         for category in "${category_keys_ref[@]}"; do
-            # Read the space-separated string into a temp array
             read -ra tags_array <<< "${assoc_array_ref[$category]}"
             for tag in "${tags_array[@]}"; do
                 valid_tags_map["$tag"]=1
             done
         done
 
-        # 3. Validate user-provided tags (this logic is unchanged)
+        # 3. Validate user-provided tags
         local invalid_tags=()
         local user_tags_arr=()
         IFS=',' read -ra user_tags_arr <<< "$tags"
@@ -114,9 +122,9 @@ initialize_and_validate() {
 
         if [ ${#invalid_tags[@]} -gt 0 ]; then
             echo "Error: Invalid tag(s) provided: ${invalid_tags[*]}"
-            echo "Please use one of the supported tags for AAP version $casc_aap_version."
+            echo "Please use one of the supported tags for AAP version $CASC_AAP_VERSION."
             echo ""
-            usage "$casc_aap_version"
+            usage "$env" # Call usage with the env to show tags
         fi
         echo "✅ Tags validated successfully."
     fi
