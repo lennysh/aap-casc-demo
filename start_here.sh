@@ -46,6 +46,7 @@ echo "🚀 Initializing new environment: $env"
 
 # --- 3. Create directories ---
 echo "  -> Creating directory structure..."
+mkdir -p "$base_dir/common"
 mkdir -p "$env_dir/imports"
 mkdir -p "$env_dir/exports"
 echo "     ...done: $env_dir/{imports, exports}"
