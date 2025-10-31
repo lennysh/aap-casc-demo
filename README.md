@@ -69,7 +69,7 @@ You don't need to be an Ansible expert to use them, but you *do* need the prereq
 Before you begin, you **must** have the following tools installed on your local machine:
 
 1.  **`ansible-navigator`**: The tool used to run the Ansible playbooks inside their execution environment.
-2.  **`yq`**: A command-line YAML processor. The wrapper scripts use this to read configuration and validate tags.
+2.  **`Bash 4.3+`**: Required for advanced script features (associative arrays and namerefs).
 3.  **Podman** or **Docker**: `ansible-navigator` needs a container runtime to pull and run the Execution Environment.
 4.  **Git**: To clone this repository.
 

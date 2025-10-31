@@ -7,6 +7,8 @@
 # - casc_aap_version
 # - tags
 # - execution_environment
+#
+# REQUIRES BASH 4.3+ for 'declare -n' (namerefs)
 
 initialize_and_validate() {
     local script_type=$1
@@ -63,23 +65,42 @@ initialize_and_validate() {
     esac
 
     # --- Define the single source of truth for the script vars file ---
-    local script_vars_file="$script_vars_dir/$casc_aap_version/vars.yml"
+    local script_vars_file="$script_vars_dir/$casc_aap_version/vars.env"
     if [[ ! -f "$script_vars_file" ]]; then
         echo "Error: Script variables file not found at $script_vars_file"
         exit 1
     fi
 
+    # --- Source the variables file ---
+    # shellcheck source=/dev/null
+    source "$script_vars_file"
+
     # --- Tag Validation Section ---
     if [ -n "$tags" ]; then
-        # Build the yq query keys dynamically based on the script type
-        local category_tags_key="${script_type}_category_tags"
-        local specific_tags_key="${script_type}_specific_tags"
-
         declare -A valid_tags_map
-        while IFS= read -r tag; do
-            valid_tags_map["$tag"]=1
-        done < <(yq ".${category_tags_key}[], .${specific_tags_key}[][]" "$script_vars_file" 2>/dev/null)
 
+        # 1. Load category tags using nameref
+        local category_tags_name="${script_type}_category_tags"
+        declare -n category_tags_ref=$category_tags_name
+        for tag in "${category_tags_ref[@]}"; do
+            valid_tags_map["$tag"]=1
+        done
+
+        # 2. Load specific tags using namerefs for categories and the associative array
+        local category_keys_name="${script_type}_specific_tags_categories"
+        local assoc_array_name="${script_type}_specific_tags"
+        declare -n category_keys_ref=$category_keys_name
+        declare -n assoc_array_ref=$assoc_array_name
+
+        for category in "${category_keys_ref[@]}"; do
+            # Read the space-separated string into a temp array
+            read -ra tags_array <<< "${assoc_array_ref[$category]}"
+            for tag in "${tags_array[@]}"; do
+                valid_tags_map["$tag"]=1
+            done
+        done
+
+        # 3. Validate user-provided tags (this logic is unchanged)
         local invalid_tags=()
         local user_tags_arr=()
         IFS=',' read -ra user_tags_arr <<< "$tags"
@@ -99,7 +120,4 @@ initialize_and_validate() {
         fi
         echo "✅ Tags validated successfully."
     fi
-
-    # --- Get Execution Environment ---
-    execution_environment="$(yq '.execution_environment' "$script_vars_file")"
 }
