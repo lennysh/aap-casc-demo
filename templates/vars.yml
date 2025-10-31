@@ -1,5 +1,5 @@
 ---
-# Exports/Imports objects as flat as possible (no sub-folders, like objects in same file)
+# Exports/Imports objects as flat as possible (no sub-folders, "like" objects in same file)
 flatten_output: false
 
 # Removes the internal ID # from the filenames when 'flatten_output' is false (or undefined)
