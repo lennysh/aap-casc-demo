@@ -4,6 +4,7 @@ set -euo pipefail
 
 # Get the directory of the script and source common functions
 parent_dir=$(dirname "$(readlink -f "$0")")
+aap_vars_dir="$parent_dir/aap_vars"
 script_vars_dir="$parent_dir/script_vars"
 
 # --- Main usage function ---
@@ -19,7 +20,7 @@ usage() {
     fi
 
     # --- Env was provided, so try to show context-specific tags ---
-    local env_vars_file="$parent_dir/aap_vars/$env_context/vars.env"
+    local env_vars_file="$aap_vars_dir/$env_context/vars.env"
     if [[ ! -f "$env_vars_file" ]]; then
         echo "Warning: Could not load vars for env '$env_context' to show available tags."
         exit 1
@@ -75,9 +76,9 @@ cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; 
 playbook_args=(
     "export.yml"
     "-e" "casc_aap_version=$CASC_AAP_VERSION" # Note: $CASC_AAP_VERSION is set in common_functions.sh
-    "-e" "{output_path: $parent_dir/aap_vars/$env/exports/$dest_folder}"
-    "-e" "@$parent_dir/aap_vars/$env/vault.yml"
-    "-e" "@$parent_dir/aap_vars/$env/vars.yml"
+    "-e" "{output_path: $aap_vars_dir/$env/exports/$dest_folder}"
+    "-e" "@$aap_vars_dir/$env/vault.yml"
+    "-e" "@$aap_vars_dir/$env/vars.yml"
 )
 
 if [ -n "$tags" ]; then
