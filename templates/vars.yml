@@ -1,0 +1,17 @@
+---
+# Exports/Imports objects as flat as possible (no sub-folders, like objects in same file)
+flatten_output: false
+
+# Removes the internal ID # from the filenames when 'flatten_output' is false (or undefined)
+omit_id: true
+
+# Default organization name override (for when the objects are global)
+organization: ''
+
+# Replaces '$encrytpted$' with a custom variable name, thus requiring
+# the var to be defined before it can be imported back in
+secrets_as_variables: true
+
+# New var (mentioned above) prefix
+secrets_as_variables_prefix: "vault"
+...

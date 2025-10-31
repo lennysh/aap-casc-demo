@@ -74,6 +74,7 @@ playbook_args=(
     "-e" "casc_aap_version=$CASC_AAP_VERSION" # Note: $CASC_AAP_VERSION is set in common_functions.sh
     "-e" "{vars_dir: $parent_dir/aap_vars/$env/imports}"
     "-e" "@$parent_dir/aap_vars/$env/vault.yml"
+    "-e" "@$parent_dir/aap_vars/$env/vars.yml"
 )
 
 if [ -n "$tags" ]; then
