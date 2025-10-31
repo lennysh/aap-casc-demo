@@ -1,4 +1,5 @@
 vault.yml
+!templates/**
 .vault_pass
 temp/
 ansible.cfg

@@ -26,7 +26,7 @@ env=$1
 base_dir="$parent_dir/aap_vars"
 env_dir="$base_dir/$env"
 vault_file="$env_dir/vault.yml"
-template_file="$parent_dir/templates/vault_template.yml"
+template_file="$parent_dir/templates/vault.yml"
 
 # --- 1. Check for existing environment ---
 if [[ -d "$env_dir" ]]; then
