@@ -117,7 +117,7 @@ initialize_and_validate() {
         for user_tag in "${user_tags_arr[@]}"; do
             local user_tag_trimmed
             user_tag_trimmed=$(echo "$user_tag" | xargs) # Trim whitespace
-            if [[ -z "${valid_tags_map[$user_tag_trimmed]}" ]]; then
+            if [[ -z "${valid_tags_map[$user_tag_trimmed]+exists}" ]]; then
                 invalid_tags+=("$user_tag_trimmed")
             fi
         done
