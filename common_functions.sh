@@ -9,6 +9,8 @@
 #
 # REQUIRES BASH 4.3+ for 'declare -n' (namerefs)
 
+set -euo pipefail
+
 initialize_and_validate() {
     local script_type=$1
     shift # Remove script_type from the arguments list

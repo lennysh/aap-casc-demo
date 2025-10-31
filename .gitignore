@@ -1,6 +1,6 @@
 vault.yml
 !templates/**
-.vault_pass
+.vault_pass.txt
 temp/
 ansible.cfg
 ansible-navigator.*

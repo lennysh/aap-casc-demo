@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Get the directory of the script and source common functions
 parent_dir=$(dirname "$(readlink -f "$0")")
 script_vars_dir="$parent_dir/script_vars"
