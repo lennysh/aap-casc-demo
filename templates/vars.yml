@@ -1,6 +1,6 @@
 ---
 # Exports/Imports objects as flat as possible (no sub-folders, "like" objects in same file)
-flatten_output: false
+flatten_output: true
 
 # Removes the internal ID # from the filenames when 'flatten_output' is false (or undefined)
 omit_id: true
