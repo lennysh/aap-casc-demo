@@ -116,16 +116,6 @@ fi
 # Set a flag to track if we create a *new* vault, so we know to open the editor
 new_vault_created=false
 
-# --- START FIX: Move version prompt to the top ---
-# --- Component 0: vars.env (Version File) ---
-if [[ ! -f "$env_vars_file" ]]; then
-    echo "  -> Creating missing 'vars.env' file..."
-    prompt_and_save_version "$env_vars_file"
-else
-    echo "  -> 'vars.env' file already exists."
-fi
-# --- END FIX ---
-
 # --- Component 1: Directories ---
 if [[ ! -d "$imports_dir" ]]; then
     echo "  -> Creating missing directory: $relative_env_dir/imports"
@@ -137,6 +127,16 @@ if [[ ! -d "$exports_dir" ]]; then
 fi
 # Also ensure common dir exists
 mkdir -p "$base_dir/common"
+
+# --- START FIX: Move version prompt to the top ---
+# --- Component 0: vars.env (Version File) ---
+if [[ ! -f "$env_vars_file" ]]; then
+    echo "  -> Creating missing 'vars.env' file..."
+    prompt_and_save_version "$env_vars_file"
+else
+    echo "  -> 'vars.env' file already exists."
+fi
+# --- END FIX ---
 
 
 # --- Component 2: vars.yml (Ansible Vars) ---
