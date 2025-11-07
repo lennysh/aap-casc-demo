@@ -2,4 +2,6 @@
 - name: FileTree Read for AAP {{ casc_aap_version }}
   ansible.builtin.import_role:
     name: infra.controller_configuration.filetree_read
+  tags:
+    - always
 ...

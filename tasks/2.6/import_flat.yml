@@ -4,9 +4,13 @@
   ansible.builtin.include_vars:
     dir: "{{ common_dir }}"
     ignore_unknown_extensions: true
+  tags:
+    - always
 
 - name: Include Flattened Instance Variable Files for AAP {{ casc_aap_version }}
   ansible.builtin.include_vars:
     dir: "{{ env_dir }}/imports"
     ignore_unknown_extensions: true
+  tags:
+    - always
 ...
