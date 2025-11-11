@@ -41,7 +41,8 @@
     files_to_create:
       - subfolder: "{{ primary_rule.subfolder | default('') }}/"
         filename: "{{ primary_rule.filename }}"
-        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2) }}"
+        # --- ADDED sort_keys=False ---
+        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - primary_rule.type == 'dict'
     - target_var_value is not none
@@ -52,7 +53,8 @@
     files_to_create:
       - subfolder: "{{ primary_rule.subfolder | default('') }}/"
         filename: "{{ primary_rule.filename }}"
-        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2) }}"
+        # --- ADDED sort_keys=False ---
+        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - primary_rule.type == 'single_list_item'
     - target_var_value is not none

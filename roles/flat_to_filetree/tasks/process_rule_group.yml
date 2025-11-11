@@ -52,7 +52,6 @@
     group_key: "{{ group_list[0] }}"
     item_list: "{{ group_list[1] | list }}" # Re-cast the iterator
     
-    # --- THIS IS THE FIX ---
     # Use the 'filename' from the rule if it exists,
     # otherwise, default to the 'group_key'.yml
     filename_to_use: "{{ rule.filename | default(group_key ~ '.yml') }}"
@@ -62,6 +61,7 @@
     file_item:
       subfolder: "{{ current_subfolder }}"
       filename: "{{ filename_to_use }}"
-      content: "---\n{{ content_dict | to_nice_yaml(indent=2) }}"
+      # --- ADDED sort_keys=False ---
+      content: "---\n{{ content_dict | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - filtered_list | length > 0
