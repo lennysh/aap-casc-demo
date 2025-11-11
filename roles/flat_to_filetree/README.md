@@ -32,11 +32,11 @@ All variables are set in the playbook that calls this role or in `defaults/main.
 * `flat_to_filetree_var_to_folder_map`
     * **Required:** A dictionary mapping the top-level YAML variable (e.g., `controller_credentials`) to the name of the root folder you want to create for it.
     * Example:
-xyzyaml
+```yaml
 flat_to_filetree_var_to_folder_map:
   controller_credentials: controller_credentials.d
   controller_projects: controller_projects.d
-xyz
+```
 
 * `flat_to_filetree_filename_logic`
     * **Required:** This is the core logic map that controls *how* each variable is processed. It defines the variable's `type` and, for lists, the `key` to use for grouping and filenames.
@@ -67,7 +67,7 @@ The `flat_to_filetree_filename_logic` map supports four types:
 
 ### Example `flat_to_filetree_filename_logic` (from defaults/main.yml)
 
-xyzyaml
+```yaml
 flat_to_filetree_filename_logic:
 
   # --- Type 1: Dictionary ---
@@ -102,7 +102,7 @@ flat_to_filetree_filename_logic:
     - type: list
       key: "name"
       subfolder: ""
-xyz
+```
 
 Dependencies
 ------------
@@ -114,7 +114,7 @@ Example Playbook
 
 This is an example of how this role is called.
 
-xyzyaml
+```yaml
 ---
 - name: Split Ansible Variable Files
   hosts: localhost
@@ -132,7 +132,7 @@ xyzyaml
 
   roles:
     - role: flat_to_filetree
-xyz
+```
 
 License
 -------
