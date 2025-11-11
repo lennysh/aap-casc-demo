@@ -21,8 +21,6 @@ flat_to_filetree_var_to_folder_map:
   controller_notification_templates: controller_notification_templates.d
   controller_projects: controller_projects.d
   controller_roles: controller_roles.d
-  # controller_roles.d/team_roles.d
-  # controller_roles.d/user_roles.d
   controller_settings: controller_settings.d
   controller_schedules: controller_schedules.d
   controller_workflow_job_templates: controller_workflow_job_templates.d

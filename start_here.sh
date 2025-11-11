@@ -57,6 +57,21 @@ prompt_and_save_version() {
     # --- END FIX ---
 }
 
+# --- Function ---
+# This function loops through the array and creates folders if they don't exist.
+ensure_folders_exist() {
+    # Loop through ALL arguments passed to the function ("$@")
+    for folder in "$@"; do        
+        # Check if the directory does NOT exist
+        if [ ! -d "$folder" ]; then
+            # If it doesn't exist, create it
+            echo "  -> Creating missing directory: $folder"
+            # Use 'mkdir -p' to create the folder and any missing parent directories
+            mkdir -p "$folder"
+        fi
+    done
+}
+
 
 # --- Initial Argument Validation ---
 if [[ $# -lt 1 ]]; then
@@ -116,28 +131,32 @@ fi
 # Set a flag to track if we create a *new* vault, so we know to open the editor
 new_vault_created=false
 
-# --- Component 1: Directories ---
-if [[ ! -d "$imports_dir" ]]; then
-    echo "  -> Creating missing directory: $relative_env_dir/imports"
-    mkdir -p "$imports_dir"
-fi
-if [[ ! -d "$exports_dir" ]]; then
-    echo "  -> Creating missing directory: $relative_env_dir/exports"
-    mkdir -p "$exports_dir"
-fi
-# Also ensure common dir exists
-mkdir -p "$base_dir/common"
+# List of folders needed for each environment
+folders_needed=(
+    "$relative_env_dir/imports"
+    "$relative_env_dir/exports"
+    "$base_dir/common"
+)
 
-# --- START FIX: Move version prompt to the top ---
-# --- Component 0: vars.env (Version File) ---
+# --- Component 1: Common Directories ---
+ensure_folders_exist "${folders_needed[@]}"
+
+# --- Component 2: vars.env (Version File) ---
 if [[ ! -f "$env_vars_file" ]]; then
     echo "  -> Creating missing 'vars.env' file..."
     prompt_and_save_version "$env_vars_file"
 else
     echo "  -> 'vars.env' file already exists."
 fi
-# --- END FIX ---
 
+# --- Component 3: AAP Directories ---
+script_vars_file="$script_vars_dir/$casc_aap_version/vars.env"
+source "$script_vars_file"
+full_aap_folders=()
+for folder in "${aap_folders_needed[@]}"; do
+    full_aap_folders+=("$relative_env_dir/imports/$folder")
+done
+ensure_folders_exist "${full_aap_folders[@]}"
 
 # --- Component 2: vars.yml (Ansible Vars) ---
 if [[ ! -f "$vars_file" ]]; then
