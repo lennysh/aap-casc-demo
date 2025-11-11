@@ -1,13 +1,11 @@
 ---
 # This task is included from main.yml and loops over var_to_folder_map
-# It expects 'map_item' to be defined by the loop.
 
 - name: Set processing variables for {{ map_item.key }}
   ansible.builtin.set_fact:
     target_var_name: "{{ map_item.key }}"
     target_folder_name: "{{ map_item.value }}"
-    # This lookup is now safe, as loaded_vars_combined
-    # was populated by 'from_yaml' and not templated.
+    # Look up the var in our safe, combined fact
     target_var_value: "{{ loaded_vars_combined[map_item.key] | default(None) }}"
   run_once: true
   delegate_to: localhost
@@ -41,7 +39,6 @@
     files_to_create:
       - subfolder: "{{ primary_rule.subfolder | default('') }}/"
         filename: "{{ primary_rule.filename }}"
-        # --- ADDED sort_keys=False ---
         content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - primary_rule.type == 'dict'
@@ -53,7 +50,6 @@
     files_to_create:
       - subfolder: "{{ primary_rule.subfolder | default('') }}/"
         filename: "{{ primary_rule.filename }}"
-        # --- ADDED sort_keys=False ---
         content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - primary_rule.type == 'single_list_item'
@@ -72,7 +68,7 @@
     - target_var_value is iterable and target_var_value is not string
     - rule.type == 'list' # Ensure we only run 'list' rules
 
-# This task is now the single point of file creation
+# This task is the single point of file creation
 - name: "📝 Create all files for '{{ target_var_name }}'"
   ansible.builtin.copy:
     content: "{{ item.content }}"
@@ -86,3 +82,4 @@
   when:
     - files_to_create is defined
     - files_to_create | length > 0
+...

@@ -13,11 +13,10 @@
   ansible.builtin.set_fact:
     current_subfolder: >-
       {%- if rule.subfolder is defined and rule.subfolder | length > 0 -%}
-      {{ rule.subfolder }}/
-      {%- else -%}
+      {{ rule.subfolder }}/{%- else -%}
       {%- endif -%}
 
-# 3. Ensure this subfolder exists (still need this)
+# 3. Ensure this subfolder exists
 - name: "Ensure sub-directory exists for {{ rule.key }}"
   ansible.builtin.file:
     path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name }}/{{ current_subfolder }}"
@@ -30,9 +29,9 @@
     - current_subfolder | length > 0
 
 # 4. Group the list *once* and save it as a fact.
+#    Ansible will convert the groupby object into a list of lists.
 - name: "Group items and store as list of lists"
   ansible.builtin.set_fact:
-    # This becomes a list, e.g., [['name1', [item1]], ['name2', [item2]]]
     grouped_list_of_lists: "{{ (filtered_list | list) | groupby(rule.key) | list }}"
   when:
     - filtered_list | length > 0
@@ -42,26 +41,25 @@
 - name: "Append file objects for rule '{{ rule.key }}'"
   ansible.builtin.set_fact:
     # Append the new 'file_item' object to the 'files_to_create' list
-    files_to_create: "{{ files_to_create + [ file_item ] }}"
-  # Loop over the list of lists we just created
+    files_to_create: "{{ files_to_create + [file_item] }}"
   loop: "{{ grouped_list_of_lists | default([]) }}"
   loop_control:
-    loop_var: group_list # This is now a list, e.g., ['name1', [item1]]
+    loop_var: group_list # This is a list, e.g., ['name1', [item1]]
   vars:
     # Use index 0 for the grouper, index 1 for the list
     group_key: "{{ group_list[0] }}"
-    item_list: "{{ group_list[1] | list }}" # Re-cast the iterator
-    
+    item_list: "{{ group_list[1] | list }}"
+
     # Use the 'filename' from the rule if it exists,
     # otherwise, default to the 'group_key'.yml
     filename_to_use: "{{ rule.filename | default(group_key ~ '.yml') }}"
-    
+
     content_dict: "{{ {target_var_name: item_list} }}"
-    # Build the final file object
+
     file_item:
       subfolder: "{{ current_subfolder }}"
       filename: "{{ filename_to_use }}"
-      # --- ADDED sort_keys=False ---
       content: "---\n{{ content_dict | to_nice_yaml(indent=2, sort_keys=False) }}"
   when:
     - filtered_list | length > 0
+...

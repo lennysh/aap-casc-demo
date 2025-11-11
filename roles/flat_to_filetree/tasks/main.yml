@@ -21,26 +21,24 @@
   ansible.builtin.set_fact:
     loaded_vars_combined: {}
 
-# --- THIS IS THE FIX ---
 - name: Read and parse var files without templating
   ansible.builtin.set_fact:
-    # We combine the parsed data.
     loaded_vars_combined: "{{ loaded_vars_combined | combine(parsed_content) }}"
   vars:
-    # 1. Read the raw text using the 'cat' pipe
+    # 1. Read the raw text using the 'cat' pipe (to avoid templating)
     raw_content: "{{ lookup('pipe', 'cat ' + item) }}"
-    # 2. Pre-process the text to remove '!unsafe'
+    # 2. Pre-process the text to remove '!unsafe' which breaks from_yaml
     clean_content: "{{ raw_content | replace('!unsafe', '') }}"
-    # 3. Parse the clean text with from_yaml. This is now safe.
+    # 3. Parse the clean text with from_yaml.
     parsed_content: "{{ clean_content | from_yaml }}"
   loop: "{{ found_var_files.files | map(attribute='path') | list }}"
   loop_control:
     loop_var: item
   when: found_var_files.files | length > 0
-# --- END FIX ---
 
 - name: 🔀 Iterate over the var-to-folder map to split
   ansible.builtin.include_tasks: split_var_list.yml
   loop: "{{ flat_to_filetree_var_to_folder_map | dict2items }}"
   loop_control:
-    loop_var: map_item # .key = var_name, .value = folder_name
+    loop_var: map_item
+...
