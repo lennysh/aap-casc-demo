@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: Lenny Shirley II
-  description: Converts flattened config-as-code YAML files into a File Tree format
+  description: Converts a flat directory of Ansible variable files (e.g., from an AAP export) into a structured file tree.
   company: Red Hat
   # issue_tracker_url: http://example.com/issue/tracker
   license: GPL-3.0-or-later
