@@ -1,0 +1,38 @@
+---
+# This file is called by process_directory.yml
+# It expects 'item' (from the loop) and 'target_var_name' (from vars)
+
+- name: "Reading file: {{ item.path }} (as raw text)"
+  ansible.builtin.set_fact:
+    raw_content: "{{ lookup('pipe', 'cat ' + (item.path | quote)) }}"
+  vars:
+    # This prevents Ansible from trying to template the lookup itself
+    ansible_jinja2_extensions: "jinja2.ext.do"
+
+- name: "Parse raw content and set fact"
+  ansible.builtin.set_fact:
+    # 1. Parse the raw text string into a YAML/JSON object
+    # 2. If raw_content is empty, from_yaml returns None.
+    #    The 'default({})' filter will catch the 'None' and
+    #    return an empty dict instead, preventing errors.
+    loaded_file_content: "{{ (raw_content | from_yaml) | default({}) }}"
+  when: raw_content is defined and raw_content | length > 0
+
+- name: "Combine loaded LIST content into main variable"
+  ansible.builtin.set_fact:
+    "{{ target_var_name }}": >-
+      {{ vars[target_var_name] + (loaded_file_content[target_var_name] | default([])) }}
+  when:
+    - loaded_file_content is defined
+    - loaded_file_content[target_var_name] is defined
+    - loaded_file_content[target_var_name] | type_debug == 'list'
+
+- name: "Append loaded DICTIONARY content to main variable"
+  ansible.builtin.set_fact:
+    "{{ target_var_name }}": >-
+      {{ vars[target_var_name] + [ loaded_file_content[target_var_name] ] }}
+  when:
+    - loaded_file_content is defined
+    - loaded_file_content[target_var_name] is defined
+    - loaded_file_content[target_var_name] | type_debug == 'dict'
+...

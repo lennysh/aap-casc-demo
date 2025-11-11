@@ -1,0 +1,50 @@
+---
+# This task is included from main.yml
+#
+# It expects:
+# - filetree_to_flat_base_path
+# - target_var_name
+# - target_var_directory
+
+- name: "🔎 Find all .yml files for {{ target_var_name }}"
+  ansible.builtin.find:
+    paths: "{{ filetree_to_flat_base_path }}/{{ target_var_directory }}"
+    recurse: true
+    patterns:
+      - '*.yml'
+      - '*.yaml'
+    file_type: file
+    excludes:
+      - "ignore_*"
+  register: found_var_files
+
+- name: "Initialize empty list for {{ target_var_name }}"
+  ansible.builtin.set_fact:
+    "{{ target_var_name }}": []
+  when: found_var_files.files | length > 0
+
+- name: "🔄 Read, parse, and merge each file for {{ target_var_name }}"
+  ansible.builtin.include_tasks: process_one_file.yml
+  loop: "{{ found_var_files.files }}"
+  loop_control:
+    loop_var: item
+  when: found_var_files.files | length > 0
+
+# --- Special Handling (runs AFTER the loop) ---
+
+- name: "✨ Flatten single-item lists (like controller_settings)"
+  ansible.builtin.set_fact:
+    "{{ target_var_name }}": "{{ vars[target_var_name] | ansible.builtin.flatten(levels=1) }}"
+  when:
+    - target_var_name == "controller_settings"
+    - vars[target_var_name] is defined
+    - vars[target_var_name] | length > 0
+
+- name: "✨ Merge dictionaries (like gateway_settings)"
+  ansible.builtin.set_fact:
+    "{{ target_var_name }}": "{{ vars[target_var_name] | ansible.builtin.combine }}"
+  when:
+    - target_var_name == "gateway_settings"
+    - vars[target_var_name] is defined
+    - vars[target_var_name] | length > 0
+...

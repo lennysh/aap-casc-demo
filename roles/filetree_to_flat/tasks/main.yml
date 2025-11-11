@@ -1,0 +1,46 @@
+---
+# tasks file for filetree_to_flat
+
+- name: 🚧 Validate base path variable
+  ansible.builtin.assert:
+    that:
+      - filetree_to_flat_base_path is defined and filetree_to_flat_base_path | length > 0
+    fail_msg: "Please define 'filetree_to_flat_base_path' (the directory to search in)."
+
+- name: 🚧 Validate output path if saving files
+  ansible.builtin.assert:
+    that:
+      - filetree_to_flat_output_path is defined and filetree_to_flat_output_path | length > 0
+    fail_msg: "Please define 'filetree_to_flat_output_path' when 'filetree_to_flat_save_files' is true."
+  when: filetree_to_flat_save_files | bool
+
+- name: 📁 Ensure output directory exists
+  ansible.builtin.file:
+    path: "{{ filetree_to_flat_output_path }}"
+    state: directory
+    mode: '0755'
+  when: filetree_to_flat_save_files | bool
+
+- name: 🔄 Iterate over var map and process each file tree directory
+  ansible.builtin.include_tasks: process_directory.yml
+  loop: "{{ filetree_to_flat_map | dict2items }}"
+  loop_control:
+    loop_var: map_item
+  vars:
+    # Set clear variable names for the sub-task
+    target_var_name: "{{ map_item.key }}"
+    target_var_directory: "{{ map_item.value }}"
+
+- name: "💾 Save all merged variables to flat files"
+  ansible.builtin.copy:
+    content: "{{ {item.key: vars[item.key]} | to_nice_yaml(indent=2, sort_keys=False) }}"
+    dest: "{{ filetree_to_flat_output_path }}/{{ item.key }}.yml"
+    mode: '0644'
+  loop: "{{ filetree_to_flat_map | dict2items }}"
+  loop_control:
+    loop_var: item
+  when:
+    - filetree_to_flat_save_files | bool
+    - vars[item.key] is defined
+    - vars[item.key] | length > 0
+...

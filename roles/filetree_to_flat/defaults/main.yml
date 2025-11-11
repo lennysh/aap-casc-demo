@@ -1,0 +1,49 @@
+---
+# defaults file for filetree_to_flat
+
+# Set to true to save the merged variables back to flat files
+filetree_to_flat_save_files: false
+
+# The directory to save the new flat files (if save_files is true)
+filetree_to_flat_output_path: ""
+
+# This map defines the primary variable name and the directory
+# where its individual files are stored.
+#
+# Format:
+# <variable_name_to_create>: <directory_to_scan>
+#
+filetree_to_flat_map:
+  aap_applications: aap_applications.d
+  aap_organizations: aap_organizations.d
+  aap_teams: aap_teams.d
+  aap_user_accounts: aap_user_accounts.d
+  controller_credential_input_sources: controller_credential_input_sources.d
+  controller_credential_types: controller_credential_types.d
+  controller_credentials: controller_credentials.d
+  controller_execution_environments: controller_execution_environments.d
+  controller_groups: controller_groups.d
+  controller_hosts: controller_hosts.d
+  controller_instance_groups: controller_instance_groups.d
+  controller_inventories: controller_inventories.d
+  controller_inventory_sources: controller_inventory_sources.d
+  controller_job_templates: controller_job_templates.d
+  controller_labels: controller_labels.d
+  controller_notification_templates: controller_notification_templates.d
+  controller_projects: controller_projects.d
+  controller_roles: controller_roles.d
+  controller_settings: controller_settings.d
+  controller_schedules: controller_schedules.d
+  controller_workflow_job_templates: controller_workflow_job_templates.d
+  gateway_authenticator_maps: gateway_authenticator_maps.d
+  gateway_authenticators: gateway_authenticators.d
+  gateway_http_ports: gateway_http_ports.d
+  gateway_role_definitions: gateway_role_definitions.d
+  gateway_role_team_assignments: gateway_role_team_assignments.d
+  gateway_role_user_assignments: gateway_role_user_assignments.d
+  gateway_routes: gateway_routes.d
+  gateway_service_clusters: gateway_service_clusters.d
+  gateway_service_keys: gateway_service_keys.d
+  gateway_service_nodes: gateway_service_nodes.d
+  gateway_services: gateway_services.d
+  gateway_settings: gateway_settings.d
