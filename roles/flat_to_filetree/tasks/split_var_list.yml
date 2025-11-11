@@ -1,0 +1,86 @@
+---
+# This task is included from main.yml and loops over var_to_folder_map
+# It expects 'map_item' to be defined by the loop.
+
+- name: Set processing variables for {{ map_item.key }}
+  ansible.builtin.set_fact:
+    target_var_name: "{{ map_item.key }}"
+    target_folder_name: "{{ map_item.value }}"
+    # This lookup is now safe, as loaded_vars_combined
+    # was populated by 'from_yaml' and not templated.
+    target_var_value: "{{ loaded_vars_combined[map_item.key] | default(None) }}"
+  run_once: true
+  delegate_to: localhost
+
+- name: "Ensure base output directory exists for {{ target_folder_name }}"
+  ansible.builtin.file:
+    path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name }}"
+    state: directory
+    mode: '0755'
+  run_once: true
+  delegate_to: localhost
+  when:
+    - target_var_value is not none
+
+- name: "Initialize file list for this variable"
+  ansible.builtin.set_fact:
+    files_to_create: []
+  run_once: true
+  delegate_to: localhost
+
+- name: "Get processing rules for {{ target_var_name }}"
+  ansible.builtin.set_fact:
+    item_rules: "{{ flat_to_filetree_filename_logic[target_var_name] | default(flat_to_filetree_filename_logic['__default__']) }}"
+    primary_rule: "{{ (flat_to_filetree_filename_logic[target_var_name] | default(flat_to_filetree_filename_logic['__default__']))[0] }}"
+  run_once: true
+  delegate_to: localhost
+
+# Branch 1: Handle Dictionaries (like gateway_settings)
+- name: "Process 'dict' variable"
+  ansible.builtin.set_fact:
+    files_to_create:
+      - subfolder: "{{ primary_rule.subfolder | default('') }}/"
+        filename: "{{ primary_rule.filename }}"
+        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2) }}"
+  when:
+    - primary_rule.type == 'dict'
+    - target_var_value is not none
+
+# Branch 2: Handle Single-Item-Lists (like controller_settings)
+- name: "Process 'single_list_item' variable"
+  ansible.builtin.set_fact:
+    files_to_create:
+      - subfolder: "{{ primary_rule.subfolder | default('') }}/"
+        filename: "{{ primary_rule.filename }}"
+        content: "---\n{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2) }}"
+  when:
+    - primary_rule.type == 'single_list_item'
+    - target_var_value is not none
+    - target_var_value is iterable and target_var_value is not string
+
+# Branch 3: Handle normal Lists (all other vars)
+- name: "Process 'list' variable"
+  ansible.builtin.include_tasks: process_rule_group.yml
+  loop: "{{ item_rules }}"
+  loop_control:
+    loop_var: rule
+  when:
+    - primary_rule.type == 'list'
+    - target_var_value is not none
+    - target_var_value is iterable and target_var_value is not string
+    - rule.type == 'list' # Ensure we only run 'list' rules
+
+# This task is now the single point of file creation
+- name: "📝 Create all files for '{{ target_var_name }}'"
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ flat_to_filetree_output_path }}/{{ target_folder_name }}/{{ item.subfolder }}{{ item.filename }}"
+    mode: '0644'
+  loop: "{{ files_to_create }}"
+  loop_control:
+    loop_var: item
+  run_once: true
+  delegate_to: localhost
+  when:
+    - files_to_create is defined
+    - files_to_create | length > 0

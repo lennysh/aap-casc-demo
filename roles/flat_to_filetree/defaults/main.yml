@@ -1,0 +1,77 @@
+---
+# defaults file for flat_to_filetree
+flat_to_filetree_source_path: ""
+flat_to_filetree_output_path: ""
+flat_to_filetree_var_to_folder_map:
+  aap_applications: aap_applications.d
+  aap_organizations: aap_organizations.d
+  aap_teams: aap_teams.d
+  aap_user_accounts: aap_user_accounts.d
+  controller_credential_input_sources: controller_credential_input_sources.d
+  controller_credential_types: controller_credential_types.d
+  controller_credentials: controller_credentials.d
+  controller_execution_environments: controller_execution_environments.d
+  controller_groups: controller_groups.d
+  controller_hosts: controller_hosts.d
+  controller_instance_groups: controller_instance_groups.d
+  controller_inventories: controller_inventories.d
+  controller_inventory_sources: controller_inventory_sources.d
+  controller_job_templates: controller_job_templates.d
+  controller_labels: controller_labels.d
+  controller_notification_templates: controller_notification_templates.d
+  controller_projects: controller_projects.d
+  controller_roles: controller_roles.d
+  # controller_roles.d/team_roles.d
+  # controller_roles.d/user_roles.d
+  controller_settings: controller_settings.d
+  controller_schedules: controller_schedules.d
+  controller_workflow_job_templates: controller_workflow_job_templates.d
+  gateway_authenticator_maps: gateway_authenticator_maps.d
+  gateway_authenticators: gateway_authenticators.d
+  gateway_http_ports: gateway_http_ports.d
+  gateway_role_definitions: gateway_role_definitions.d
+  gateway_role_team_assignments: gateway_role_team_assignments.d
+  gateway_role_user_assignments: gateway_role_user_assignments.d
+  gateway_routes: gateway_routes.d
+  gateway_service_clusters: gateway_service_clusters.d
+  gateway_service_keys: gateway_service_keys.d
+  gateway_service_nodes: gateway_service_nodes.d
+  gateway_services: gateway_services.d
+  gateway_settings: gateway_settings.d
+
+# --- This new map defines the FILENAME and SUBFOLDER logic ---
+# It checks for keys in the order listed.
+flat_to_filetree_filename_logic:
+
+  # --- Type 1: Dictionary ---
+  gateway_settings:
+    - type: dict
+      filename: "gateway_settings.yml"
+      subfolder: ""
+
+  # --- Type 2: List of 1 item ---
+  controller_settings:
+    - type: single_list_item # Special type for this var
+      filename: "controller_settings.yml"
+      subfolder: ""
+
+  # --- Type 3: Grouped List ---
+  controller_roles:
+    - type: list
+      key: "team"
+      subfolder: "team_roles.d"
+    - type: list
+      key: "user"
+      subfolder: "user_roles.d"
+
+  aap_user_accounts:
+    - type: list
+      key: "username"
+      subfolder: ""
+
+  # --- Type 4: Default (List grouped by 'name') ---
+  __default__:
+    - type: list
+      key: "name"
+      subfolder: ""
+...

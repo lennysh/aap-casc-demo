@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Lenny Shirley II
+  description: Converts flattened config-as-code YAML files into a File Tree format
+  company: Red Hat
+  # issue_tracker_url: http://example.com/issue/tracker
+  license: GPL-3.0-or-later
+  min_ansible_version: 2.15.0
+  galaxy_tags: []
+dependencies: []
