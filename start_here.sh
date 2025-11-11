@@ -156,6 +156,9 @@ full_aap_folders=()
 for folder in "${aap_folders_needed[@]}"; do
     full_aap_folders+=("$relative_env_dir/imports/$folder")
 done
+for folder in "${aap_folders_needed[@]}"; do
+    full_aap_folders+=("$base_dir/common/$folder")
+done
 ensure_folders_exist "${full_aap_folders[@]}"
 
 # --- Component 2: vars.yml (Ansible Vars) ---
