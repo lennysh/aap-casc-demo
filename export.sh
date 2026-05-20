@@ -144,7 +144,7 @@ if [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]]; then
         exit 1
     fi
     # Use only this path for this run (override; no export so caller's env is untouched).
-    ANSIBLE_COLLECTIONS_PATH="$collections_dir" ansible-playbook "${playbook_args[@]}"
+    ANSIBLE_COLLECTIONS_PATH="$collections_dir" CONTROLLER_REQUEST_TIMEOUT="${CONTROLLER_REQUEST_TIMEOUT:-60}" ansible-playbook "${playbook_args[@]}"
 else
     ansible-navigator run "${playbook_args[@]}" \
         --mode stdout \
