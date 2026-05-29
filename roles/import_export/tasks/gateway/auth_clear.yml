@@ -1,7 +1,8 @@
 ---
 - name: Delete this token
   ansible.platform.token:
-    aap_hostname: "{{ aap_hostname }}"
+    # aap_hostname: "{{ aap_hostname }}"
+    gateway_hostname: "{{ aap_hostname }}"
     aap_token: "{{ aap_token }}"
     existing_token: "{{ aap_token }}"
     state: absent

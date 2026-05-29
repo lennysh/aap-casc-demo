@@ -5,10 +5,10 @@ collections:
   - name: infra.aap_configuration_extended
 
   - name: ansible.controller
-    version: '>=4.7,<4.8'
+    version: '>=4.7,<4.9'
 
   - name: ansible.platform
-    version: '>=2.6,<2.7'
+    version: '>=2.6,<2.8'
 
   - name: ansible.eda
 

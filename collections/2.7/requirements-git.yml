@@ -8,6 +8,12 @@ collections:
     source: https://github.com/redhat-cop/aap_configuration_extended.git
     type: git
 
+  # - name: ansible.controller
+  #   source: https://github.com/ansible/awx.git
+  #   type: git
+  #   folder: awx_collection
+  #   version: 'devel'
+
   - name: ansible.controller
     version: '>=4.7,<4.8'
 
