@@ -280,3 +280,8 @@ if [[ "$new_vault_created" = true ]]; then
 else
     echo "To edit the vault, use: ./vault-edit.sh $org $env"
 fi
+
+echo ""
+echo "💡 Bash tab completion: source this file in your interactive shell (once per session,"
+echo "   or add the same line to ~/.bashrc for every new terminal):"
+echo "   source \"$parent_dir/autocomplete.sh\""

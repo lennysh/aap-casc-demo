@@ -41,9 +41,9 @@ _repo_scripts_autocomplete() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for script in "$SCRIPT_DIR"/*.sh; do
     basename_script=$(basename "$script")
-    # Skip the start script itself
-    if [ "$basename_script" != "start_here.sh" ]; then
-        complete -F _repo_scripts_autocomplete "$basename_script"
-        complete -F _repo_scripts_autocomplete "./$basename_script"
-    fi
+    case "$basename_script" in
+        start_here.sh|autocomplete.sh) continue ;;
+    esac
+    complete -F _repo_scripts_autocomplete "$basename_script"
+    complete -F _repo_scripts_autocomplete "./$basename_script"
 done

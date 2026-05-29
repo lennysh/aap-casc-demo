@@ -229,6 +229,28 @@ If you use **`--navigator`**, you are responsible for:
 
 You can set the environment variable **`CASC_USE_PLAYBOOK`** to `1`, `true`, or `yes` to prefer playbook; leave it unset or set to something else to prefer navigator. The `--playbook` and `--navigator` flags override the environment variable.
 
+### Bash tab completion
+
+The repository includes `autocomplete.sh`, which offers Tab completion for `<org_name>` and `<environment_name>` on scripts such as `./export.sh` and `./import.sh`. Completion is based on directories under `orgs_vars/`.
+
+Register it in your **interactive Bash shell** (sourcing from inside a running script does not affect your terminal):
+
+**One-time (current shell session):**
+
+```bash
+source /path/to/your-clone/autocomplete.sh
+```
+
+Use the absolute path to this repository (or `source "$(pwd)/autocomplete.sh"` when your shell is already in the repo root).
+
+**Every new terminal (add to `~/.bashrc`):**
+
+```bash
+source /path/to/your-clone/autocomplete.sh
+```
+
+After sourcing, Tab completion applies until you close that shell (or until reboot if you added it to `.bashrc`). This is Bash-only; zsh users need a separate completion setup.
+
 ### Avoid Typing Your Vault Password
 By default, these scripts will securely prompt you for your vault password every time they run.
 
