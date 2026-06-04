@@ -48,8 +48,8 @@ filetree_aap_teams:
   - "{{ dir_orgs_vars }}/{{ orgs }}/common/aap_teams.d/"
   - "{{ dir_orgs_vars }}/{{ orgs }}/{{ env }}/imports/aap_teams.d/"
 filetree_aap_user_accounts:
-  - "{{ dir_orgs_vars }}/{{ orgs }}/common/aap_users.d/"
-  - "{{ dir_orgs_vars }}/{{ orgs }}/{{ env }}/imports/aap_users.d/"
+  - "{{ dir_orgs_vars }}/{{ orgs }}/common/aap_user_accounts.d/"
+  - "{{ dir_orgs_vars }}/{{ orgs }}/{{ env }}/imports/aap_user_accounts.d/"
 filetree_gateway_role_definitions:
   - "{{ dir_orgs_vars }}/{{ orgs }}/common/gateway_role_definitions.d/"
   - "{{ dir_orgs_vars }}/{{ orgs }}/{{ env }}/imports/gateway_role_definitions.d/"
