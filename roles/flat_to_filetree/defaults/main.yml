@@ -16,7 +16,7 @@ flat_to_filetree_var_to_folder_map:
   controller_instance_groups: controller_instance_groups.d
   controller_inventories: controller_inventories.d
   controller_inventory_sources: controller_inventory_sources.d
-  controller_job_templates: controller_job_templates.d
+  controller_templates: controller_job_templates.d
   controller_labels: controller_labels.d
   controller_notification_templates: controller_notification_templates.d
   controller_projects: controller_projects.d
