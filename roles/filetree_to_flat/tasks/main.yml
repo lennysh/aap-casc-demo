@@ -34,7 +34,7 @@
 - name: "💾 Save all merged variables to flat files"
   ansible.builtin.copy:
     content: "{{ {item.key: vars[item.key]} | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
-    dest: "{{ filetree_to_flat_output_path }}/{{ item.key }}.yml"
+    dest: "{{ filetree_to_flat_output_path }}/{{ item.key | safe_path_segment }}.yml"
     mode: '0644'
   loop: "{{ filetree_to_flat_map | dict2items }}"
   loop_control:

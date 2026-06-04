@@ -44,12 +44,12 @@
 
     # Use the 'filename' from the rule if it exists,
     # otherwise, default to the 'group_key'.yml
-    filename_to_use: "{{ rule.filename | default(group_key ~ '.yml') }}"
+    filename_to_use: "{{ rule.filename | default(group_key ~ '.yml') | safe_path_segment }}"
 
     content_dict: "{{ {target_var_name: item_list} }}"
 
     file_item:
-      subfolder: "{{ rule.subfolder }}"
+      subfolder: "{{ rule.subfolder | default('') | safe_path_segment }}"
       filename: "{{ filename_to_use }}"
       content: "{{ content_dict | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:

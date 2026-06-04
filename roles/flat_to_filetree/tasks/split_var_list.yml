@@ -27,8 +27,8 @@
 - name: "Process 'dict' variable"
   ansible.builtin.set_fact:
     __files_to_create:
-      - subfolder: "{{ primary_rule.subfolder | default('') }}"
-        filename: "{{ primary_rule.filename | regex_replace('[^a-zA-Z0-9_.-]', '_') | regex_replace('_+', '_') | regex_replace('^_+|_+$', '') | trim }}"
+      - subfolder: "{{ primary_rule.subfolder | default('') | safe_path_segment }}"
+        filename: "{{ primary_rule.filename | safe_path_segment }}"
         content: "{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:
     - primary_rule.type == 'dict'
@@ -39,8 +39,8 @@
 - name: "Process 'single_list_item' variable"
   ansible.builtin.set_fact:
     __files_to_create:
-      - subfolder: "{{ primary_rule.subfolder | default('') }}"
-        filename: "{{ primary_rule.filename | regex_replace('[^a-zA-Z0-9_.-]', '_') | regex_replace('_+', '_') | regex_replace('^_+|_+$', '') | trim }}"
+      - subfolder: "{{ primary_rule.subfolder | default('') | safe_path_segment }}"
+        filename: "{{ primary_rule.filename | safe_path_segment }}"
         content: "{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:
     - primary_rule.type == 'single_list_item'
@@ -61,7 +61,7 @@
 
 - name: "Ensure base output directory exists for {{ target_folder_name }}"
   ansible.builtin.file:
-    path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name }}"
+    path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name | safe_path_segment }}"
     state: directory
     mode: '0755'
   run_once: true
@@ -82,7 +82,7 @@
 
 - name: "Ensure subfolder directories exist"
   ansible.builtin.file:
-    path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name }}/{{ item }}"
+    path: "{{ flat_to_filetree_output_path }}/{{ target_folder_name | safe_path_segment }}/{{ item | safe_path_segment }}"
     state: directory
     mode: '0755'
   loop: "{{ __unique_subfolders }}"
@@ -102,7 +102,8 @@
 - name: "📝 Create all files for '{{ target_var_name }}'"
   ansible.builtin.copy:
     content: "{{ item.content }}"
-    dest: "{{ flat_to_filetree_output_path | trim }}/{{ target_folder_name | trim }}/{{ item.subfolder | trim }}/{{ item.filename }}"
+    dest: >-
+      {{ flat_to_filetree_output_path | trim }}/{{ target_folder_name | safe_path_segment }}/{% if item.subfolder | default('') | trim | length > 0 %}{{ item.subfolder | safe_path_segment }}/{% endif %}{{ item.filename | safe_path_segment }}
     mode: '0644'
   loop: "{{ __files_to_create }}"
   loop_control:
