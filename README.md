@@ -21,6 +21,8 @@
     * [Exporting Configuration](#exporting-configuration)
     * [Importing Configuration](#importing-configuration)
 * 💡 [Tips and Advanced Usage](#-tips-and-advanced-usage)
+    * [ansible-playbook vs ansible-navigator](#ansible-playbook-vs-ansible-navigator)
+    * [Versioned collections](#versioned-collections)
     * [Environment vars.yml](#environment-varsyml)
 * 📚 [Documentation](#-documentation)
 * 🤝 [Contributing](#-contributing)
@@ -74,7 +76,7 @@ You don't need to be an Ansible expert to use them, but you *do* need the prereq
 
 Before you begin, you **must** have the following installed on your local machine:
 
-1.  **Ansible** (for **`ansible-playbook`**, the default): Used with versioned collections in `collections/<version>/`. Install collections per AAP version with `./install_collections.sh` (see [Tips](#-tips-and-advanced-usage)).
+1.  **Ansible** (for **`ansible-playbook`**, the default): Used with versioned collections in `collections/<version>/`. Install collections per AAP version with `./install_collections.sh`; use `./list_collections.sh` to verify what is installed (see [Versioned collections](#versioned-collections)).
 2.  **`Bash 4.3+`**: Required for script features (associative arrays and namerefs).
 3.  **Git**: To clone this repository.
 
@@ -204,11 +206,7 @@ This command reads from your local files and configures your AAP instance.
 
 ### ansible-playbook vs ansible-navigator
 
-By default, the scripts use **`ansible-playbook`** with versioned collections from `collections/<version>/` (e.g. `collections/2.5/`). You must install those collections first:
-
-```bash
-./install_collections.sh
-```
+By default, the scripts use **`ansible-playbook`** with versioned collections from `collections/<version>/` (e.g. `collections/2.5/`). You must install those collections first (see [Versioned collections](#versioned-collections)).
 
 To use **`ansible-navigator`** with an Execution Environment instead (no local collections), pass `--navigator`:
 
@@ -228,6 +226,42 @@ If you use **`--navigator`**, you are responsible for:
    - The scripts pass this value to `ansible-navigator` as `--execution-environment-image`. If `execution_environment` is missing when you run with `--navigator`, the scripts will error.
 
 You can set the environment variable **`CASC_USE_PLAYBOOK`** to `1`, `true`, or `yes` to prefer playbook; leave it unset or set to something else to prefer navigator. The `--playbook` and `--navigator` flags override the environment variable.
+
+### Versioned collections
+
+When using **`ansible-playbook`** (the default), each AAP version uses its own self-contained collection directory under `collections/<version>/`. Two helper scripts manage that layout:
+
+| Script | Purpose |
+|--------|---------|
+| **`install_collections.sh`** | Install collections from `collections/<version>/requirements.yml` into `collections/<version>/`. |
+| **`list_collections.sh`** | List collections installed in `collections/<version>/` for a single AAP version. |
+
+**Install collections**
+
+```bash
+chmod +x install_collections.sh list_collections.sh
+
+# Install for all versions found under script_vars/
+./install_collections.sh
+
+# Install for one or more versions only
+./install_collections.sh 2.6
+./install_collections.sh 2.5 2.6
+
+# Use requirements-git.yml instead of requirements.yml (git sources)
+./install_collections.sh --git 2.6
+```
+
+Each version needs a requirements file at `collections/<version>/requirements.yml` (or `requirements-git.yml` with `--git`).
+
+**List installed collections**
+
+```bash
+# Show what is installed for AAP 2.6 (only collections in collections/2.6/)
+./list_collections.sh 2.6
+```
+
+This runs `ansible-galaxy collection list` scoped to that version directory, so it does not include collections from `~/.ansible/collections` or system paths.
 
 ### Bash tab completion
 
