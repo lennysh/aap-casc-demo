@@ -1,0 +1,31 @@
+---
+# Copy flat export files as-is into the filetree layout (no expansion / re-serialization).
+# Expects __copy_only_file_items to be set in main.yml.
+
+- name: Ensure copy-only destination directories exist
+  ansible.builtin.file:
+    path: "{{ flat_to_filetree_output_path }}/{{ copy_dest.folder | safe_path_segment }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ __copy_only_file_items }}"
+  loop_control:
+    loop_var: item
+    label: "{{ copy_dest.folder }}"
+  vars:
+    copy_dest: "{{ flat_to_filetree_copy_only_map[item.path | basename] }}"
+  when: __copy_only_file_items | length > 0
+
+- name: Copy files that should not be expanded into filetree format
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ copy_dest_path }}"
+    mode: '0644'
+  loop: "{{ __copy_only_file_items }}"
+  loop_control:
+    loop_var: item
+    label: "{{ copy_dest_filename }}"
+  vars:
+    copy_dest: "{{ flat_to_filetree_copy_only_map[item.path | basename] }}"
+    copy_dest_filename: "{{ (copy_dest.filename | default(item.path | basename)) | safe_path_segment }}"
+    copy_dest_path: "{{ flat_to_filetree_output_path | trim }}/{{ copy_dest.folder | safe_path_segment }}/{{ copy_dest_filename }}"
+  when: __copy_only_file_items | length > 0

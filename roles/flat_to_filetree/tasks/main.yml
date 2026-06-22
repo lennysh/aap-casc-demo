@@ -17,8 +17,31 @@
     file_type: file
     excludes:
       - "ignore_*"
-      - "current_settings.yaml"
   register: found_var_files
+
+- name: Initialize file separation lists
+  ansible.builtin.set_fact:
+    __copy_only_file_items: []
+    __files_to_process: []
+  when: found_var_files.files | length > 0
+
+- name: Classify found files for copy-only vs expansion
+  ansible.builtin.set_fact:
+    __copy_only_file_items: "{{ __copy_only_file_items + ([item] if ((item.path | basename) in flat_to_filetree_copy_only_map) else []) }}"
+    __files_to_process: "{{ __files_to_process + ([item] if ((item.path | basename) not in flat_to_filetree_copy_only_map) else []) }}"
+  loop: "{{ found_var_files.files }}"
+  when: found_var_files.files | length > 0
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Copy files that should not be expanded into filetree format
+  ansible.builtin.include_tasks: copy_only_files.yml
+  when: __copy_only_file_items | default([]) | length > 0
+
+- name: Build list of variable names handled by copy-only files
+  ansible.builtin.set_fact:
+    __copy_only_var_names: "{{ flat_to_filetree_copy_only_map | dict2items | map(attribute='value') | selectattr('var_name', 'defined') | map(attribute='var_name') | list }}"
+  when: flat_to_filetree_copy_only_map | length > 0
 
 - name: Initialize empty var dictionary
   ansible.builtin.set_fact:
@@ -34,18 +57,19 @@
     clean_content: "{{ raw_content | replace('!unsafe', '') }}"
     # 3. Parse the clean text with from_yaml.
     parsed_content: "{{ clean_content | from_yaml }}"
-  loop: "{{ found_var_files.files | map(attribute='path') | list }}"
+  loop: "{{ __files_to_process | default([]) | map(attribute='path') | list }}"
   loop_control:
     loop_var: item
-  when: found_var_files.files | length > 0
+  when: __files_to_process | default([]) | length > 0
 
 - name: Filter map to only include variables that exist
   ansible.builtin.set_fact:
     __filtered_folder_map: >-
       {%- set existing = {} -%}
+      {%- set copy_only_vars = __copy_only_var_names | default([]) -%}
       {%- for var_name, folder_name in flat_to_filetree_var_to_folder_map.items() -%}
-        {#- Check if the var_name is a key in our combined dictionary -#}
-        {%- if var_name in loaded_vars_combined -%}
+        {#- Skip vars handled by copy-only files -#}
+        {%- if var_name in loaded_vars_combined and var_name not in copy_only_vars -%}
           {%- set _ = existing.update({var_name: folder_name}) -%}
         {%- endif -%}
       {%- endfor -%}

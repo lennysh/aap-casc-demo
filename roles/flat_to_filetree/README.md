@@ -29,6 +29,21 @@ All variables are set in the playbook that calls this role or in `defaults/main.
     * **Required:** The path to the new directory where the file tree will be created.
     * Example: `"orgs_vars/OCP0Lab/AAP26/imports"`
 
+* `flat_to_filetree_copy_only_map`
+    * **Optional:** Maps flat export filenames to copy-only destinations. These files are copied as-is into the filetree layout without list expansion or YAML re-serialization. Use this for exports like `current_settings.yaml` where preserving `!unsafe` tags and formatting matters.
+    * Example:
+```yaml
+flat_to_filetree_copy_only_map:
+  current_settings.yaml:
+    folder: controller_settings.d
+    filename: controller_settings.yml
+    var_name: controller_settings
+  gateway_settings.yaml:
+    folder: gateway_settings.d
+    filename: gateway_settings.yml
+    var_name: gateway_settings
+```
+
 * `flat_to_filetree_var_to_folder_map`
     * **Required:** A dictionary mapping the top-level YAML variable (e.g., `controller_credentials`) to the name of the root folder you want to create for it.
     * Example:
@@ -50,18 +65,12 @@ The `flat_to_filetree_filename_logic` map supports four types:
     * It requires a `key` to be specified (e.g., `name`, `team`, `username`).
     * It will group the list based on this key and create a separate file for each group.
     * `subfolder:` can be used to sort groups into subdirectories (e.g., `team_roles.d`).
-    * `filename:` can be used to give a static filename for a single-item group (like `controller_settings`).
 
 2.  **`type: dict`**
     * Used for variables that are a single, flat dictionary (not a list).
     * It requires a static `filename:` to be specified.
-    * Example: `gateway_settings`
 
-3.  **`type: single_list_item`**
-    * Used for variables that are a list containing a *single* dictionary (like `controller_settings`).
-    * It requires a static `filename:` to be specified.
-
-4.  **`__default__`**
+3.  **`__default__`**
     * A fallback rule for any variable *not* explicitly defined in the map.
     * By default, it uses `type: list` and `key: "name"`.
 
@@ -70,19 +79,7 @@ The `flat_to_filetree_filename_logic` map supports four types:
 ```yaml
 flat_to_filetree_filename_logic:
 
-  # --- Type 1: Dictionary ---
-  gateway_settings:
-    - type: dict
-      filename: "gateway_settings.yml"
-      subfolder: ""
-
-  # --- Type 2: List of 1 item ---
-  controller_settings:
-    - type: single_list_item # Special type for this var
-      filename: "controller_settings.yml"
-      subfolder: ""
-
-  # --- Type 3: Grouped List ---
+  # --- Type 1: Grouped List ---
   controller_roles:
     - type: list
       key: "team"
