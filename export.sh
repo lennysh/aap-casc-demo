@@ -47,12 +47,12 @@ usage() {
         # Use printf to join the array with ", "
         local category_tags_string
         category_tags_string=$(printf '%s, ' "${export_category_tags[@]}")
-        
+
         # Echo the string, removing the final trailing ", "
         echo "Category Tags: ${category_tags_string%, }"
         echo ""
     fi
-    
+
     echo "Specific Tags Supported (for AAP $CASC_AAP_VERSION):"
     for category in "${export_specific_tags_categories[@]}"; do
         echo "  $category:"

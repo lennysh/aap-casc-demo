@@ -41,12 +41,12 @@ usage() {
     # Source the env file to get the arrays
     # shellcheck source=/dev/null
     source "$script_vars_file"
-    
+
     if [[ ${#import_category_tags[@]} -gt 0 ]]; then
         # Use printf to join the array with ", "
         local category_tags_string
         category_tags_string=$(printf '%s, ' "${import_category_tags[@]}")
-        
+
         # Echo the string, removing the final trailing ", "
         echo "Category Tags: ${category_tags_string%, }"
         echo ""
