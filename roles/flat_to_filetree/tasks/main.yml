@@ -17,6 +17,7 @@
     file_type: file
     excludes:
       - "ignore_*"
+      - "current_settings.yaml"
   register: found_var_files
 
 - name: Initialize empty var dictionary
