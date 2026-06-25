@@ -4,12 +4,16 @@ collections:
 
   - name: infra.aap_configuration_extended
 
+
+  # Per https://access.redhat.com/articles/7143981 as of 2026-06-24:
   - name: ansible.controller
-    version: '>=4.7,<4.9'
+    version: '>=4.8,<4.9'
 
   - name: ansible.platform
-    version: '>=2.6,<2.8'
+    version: '>=2.7,<2.8'
 
   - name: ansible.eda
+    version: '>=2.12.1'
 
   - name: ansible.hub
+    version: '>=1.0.6'
