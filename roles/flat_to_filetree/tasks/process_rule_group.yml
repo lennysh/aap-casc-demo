@@ -49,7 +49,7 @@
     content_dict: "{{ {target_var_name: item_list} }}"
 
     file_item:
-      subfolder: "{{ rule.subfolder | default('') | safe_path_segment }}"
+      subfolder: "{{ (rule.subfolder | default('') | trim | length > 0) | ternary(rule.subfolder | safe_path_segment, '') }}"
       filename: "{{ filename_to_use }}"
       content: "{{ content_dict | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:

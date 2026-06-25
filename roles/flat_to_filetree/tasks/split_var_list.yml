@@ -27,7 +27,7 @@
 - name: "Process 'dict' variable"
   ansible.builtin.set_fact:
     __files_to_create:
-      - subfolder: "{{ primary_rule.subfolder | default('') | safe_path_segment }}"
+      - subfolder: "{{ (primary_rule.subfolder | default('') | trim | length > 0) | ternary(primary_rule.subfolder | safe_path_segment, '') }}"
         filename: "{{ primary_rule.filename | safe_path_segment }}"
         content: "{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:
@@ -39,7 +39,7 @@
 - name: "Process 'single_list_item' variable"
   ansible.builtin.set_fact:
     __files_to_create:
-      - subfolder: "{{ primary_rule.subfolder | default('') | safe_path_segment }}"
+      - subfolder: "{{ (primary_rule.subfolder | default('') | trim | length > 0) | ternary(primary_rule.subfolder | safe_path_segment, '') }}"
         filename: "{{ primary_rule.filename | safe_path_segment }}"
         content: "{{ {target_var_name: target_var_value} | to_nice_yaml(indent=2, sort_keys=False, explicit_start=True) }}"
   when:
