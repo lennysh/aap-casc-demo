@@ -25,6 +25,7 @@
     * [Versioned collections](#versioned-collections)
     * [Environment vars.yml](#environment-varsyml)
 * 📚 [Documentation](#-documentation)
+* 🔗 [Useful Links](#-useful-links)
 * 🤝 [Contributing](#-contributing)
 * 🙏 [Thank You](#-thank-you)
 * 📦 [Supported AAP Versions](#-supported-aap-versions)
@@ -328,6 +329,12 @@ Additional guides and references in the **`docs/`** directory:
 
 * **[Migration guide: Controller to AAP](docs/MIGRATION_GUIDE_CONTROLLER_TO_AAP.md)** — Migrating from `infra.controller_configuration` (AAP 2.4 and earlier) to `infra.aap_configuration` / `infra.aap_configuration_extended` (AAP 2.5+).
 
+## 🔗 Useful Links
+
+External references worth bookmarking:
+
+* **[AAP 2.7 Upgrade — API and Configuration as Code Migration Guide](https://access.redhat.com/articles/7143981)** — Red Hat guide for upgrading to AAP 2.7, including gateway-only API access and CaSC migration considerations.
+
 ## 🤝 Contributing
 
 We welcome feedback and contributions.
@@ -340,12 +347,13 @@ We welcome feedback and contributions.
 
 Thanks to everyone who has offered ideas and suggestions that improved this project:
 
-* **Joshua Laughlin @ Credit Acceptance** — for suggesting the `--export-path` / `-o` option on `export.sh`.
+* **[JLaughlin](https://github.com/jd1306)** — for suggesting the `--export-path` / `-o` option on `export.sh`.
 
 ## 📦 Supported AAP Versions
 
 This tool is explicitly designed to support multiple AAP versions by loading different tasks and tag lists for each. Supported versions include:
 
+* **AAP 2.7** (still a WIP)
 * **AAP 2.6**
 * **AAP 2.5**
 * **AAP 2.4**
