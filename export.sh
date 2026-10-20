@@ -12,9 +12,10 @@ script_vars_dir="$parent_dir/script_vars"
 usage() {
     local org_context=$1
     local env_context=$2
-    echo "Usage: $0 <org> <env> [--playbook|--navigator] [-o|--export-path <dir>] [-a|--all] [-t|--tags <tags>]"
+    echo "Usage: $0 <org> <env> [--playbook|--navigator] [--check|-C] [-o|--export-path <dir>] [-a|--all] [-t|--tags <tags>]"
     echo "  --playbook    Use ansible-playbook (versioned collections). Overrides CASC_USE_PLAYBOOK."
     echo "  --navigator   Use ansible-navigator with EE (default). Overrides CASC_USE_PLAYBOOK."
+    echo "  --check, -C   Run in Ansible check mode (dry-run; no changes)."
     echo "  -o, --export-path <dir>  Write export to this directory instead of orgs_vars/.../exports/<timestamp>."
     echo "  Default: use CASC_USE_PLAYBOOK env (1/true/yes = playbook); else navigator."
     echo ""
@@ -69,13 +70,14 @@ usage() {
 # shellcheck source=common_functions.sh
 source "$parent_dir/common_functions.sh"
 
-# --- Parse --playbook / --navigator (must be done before initialize_and_validate) ---
+# --- Parse --playbook / --navigator / --check (must be done before initialize_and_validate) ---
 # Default from env: CASC_USE_PLAYBOOK=1 or true or yes → playbook; else navigator.
 case "${CASC_USE_PLAYBOOK:-1}" in
     1|true|yes|TRUE|YES) USE_ANSIBLE_PLAYBOOK=true ;;
     *)                   USE_ANSIBLE_PLAYBOOK=false ;;
 esac
 CUSTOM_EXPORT_PATH=""
+CHECK_MODE=false
 filtered_args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -85,6 +87,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --navigator)
             USE_ANSIBLE_PLAYBOOK=false
+            shift
+            ;;
+        --check|-C)
+            CHECK_MODE=true
             shift
             ;;
         -o|--export-path)
@@ -132,7 +138,11 @@ if [ -n "$tags" ]; then
     playbook_args+=("-e" "$extra_vars")
 fi
 
-echo "Running playbook for AAP version: $CASC_AAP_VERSION ($( [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]] && echo 'ansible-playbook' || echo 'ansible-navigator/EE' ))"
+if [[ "$CHECK_MODE" == "true" ]]; then
+    playbook_args+=("--check")
+fi
+
+echo "Running playbook for AAP version: $CASC_AAP_VERSION ($( [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]] && echo 'ansible-playbook' || echo 'ansible-navigator/EE' ))$( [[ "$CHECK_MODE" == "true" ]] && echo ', check mode' )"
 
 if [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]]; then
     # Use ansible-playbook with a version-specific collections path (no EE).
