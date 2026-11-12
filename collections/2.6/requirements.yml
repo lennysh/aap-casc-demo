@@ -11,5 +11,6 @@ collections:
     version: '>=2.6,<2.7'
 
   - name: ansible.eda
+    version: '>=2.9.0'
 
   - name: ansible.hub

@@ -1,10 +1,10 @@
 ---
 collections:
   - name: infra.aap_configuration
+    version: '>=4.10.0'
 
   - name: infra.aap_configuration_extended
-
-
+    version: '>=4.12.0'
   # Per https://access.redhat.com/articles/7143981 as of 2026-06-24:
   - name: ansible.controller
     version: '>=4.8,<4.9'
