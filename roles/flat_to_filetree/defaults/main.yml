@@ -19,6 +19,39 @@ flat_to_filetree_copy_only_map:
     filename: gateway_settings.yml
     var_name: gateway_settings
 
+# Every AAP version exports the same standard (AAP 2.5+) layout. Before splitting,
+# variables listed here are renamed to `target` (with optional per-item key renames)
+# and appended to it. Processed in order.
+flat_to_filetree_var_aliases:
+  # 2.5+: gateway_organizations only carries name/description; fold into aap_organizations
+  gateway_organizations:
+    target: aap_organizations
+  # 2.4 (infra.controller_configuration) names
+  controller_organizations:
+    target: aap_organizations
+  controller_teams:
+    target: aap_teams
+  controller_user_accounts:
+    target: aap_user_accounts
+    rename_keys:
+      superuser: is_superuser
+      auditor: is_platform_auditor
+      is_auditor: is_platform_auditor
+      is_system_auditor: is_platform_auditor
+  controller_applications:
+    target: aap_applications
+
+# After aliasing, entries sharing these identity fields are merged into one (the first
+# occurrence wins; later ones only add missing fields). Removes the duplicates produced
+# when several exporters (e.g. controller_teams + gateway_teams) write the same objects.
+flat_to_filetree_merge_keys:
+  aap_organizations: [name]
+  aap_teams: [name, organization]
+  aap_user_accounts: [username]
+  aap_applications: [name, organization]
+
+# Keys are the top-level variable names written by filetree_create (not the template names),
+# after flat_to_filetree_var_aliases has been applied.
 flat_to_filetree_var_to_folder_map:
   aap_applications: aap_applications.d
   aap_organizations: aap_organizations.d
@@ -31,15 +64,16 @@ flat_to_filetree_var_to_folder_map:
   controller_groups: controller_groups.d
   controller_hosts: controller_hosts.d
   controller_instance_groups: controller_instance_groups.d
+  controller_instances: controller_instances.d
   controller_inventories: controller_inventories.d
   controller_inventory_sources: controller_inventory_sources.d
   controller_templates: controller_job_templates.d
   controller_labels: controller_labels.d
-  controller_notification_templates: controller_notification_templates.d
+  controller_notifications: controller_notification_templates.d
   controller_projects: controller_projects.d
   controller_roles: controller_roles.d
   controller_schedules: controller_schedules.d
-  controller_workflow_job_templates: controller_workflow_job_templates.d
+  controller_workflows: controller_workflow_job_templates.d
   eda_credential_types: eda_credential_types.d
   eda_credentials: eda_credentials.d
   eda_decision_environments: eda_decision_environments.d
@@ -86,6 +120,16 @@ flat_to_filetree_filename_logic:
   aap_user_accounts:
     - type: list
       key: "username"
+      subfolder: ""
+
+  controller_instances:
+    - type: list
+      key: "hostname"
+      subfolder: ""
+
+  controller_credential_input_sources:
+    - type: list
+      key: "target_credential"
       subfolder: ""
 
   # --- Type 4: Default (List grouped by 'name') ---

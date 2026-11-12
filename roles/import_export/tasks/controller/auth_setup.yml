@@ -7,7 +7,7 @@
 
 - name: Create a new token using controller username/password
   ansible.controller.token:
-    description: 'Creating temporary token for aap-demo-lab'
+    description: 'Temporary token for aap-casc-demo import/export job'
     scope: "write"
     state: present
     controller_host: "{{ aap_hostname }}"
@@ -21,4 +21,5 @@
   changed_when: false
   tags:
     - always
+  check_mode: false
 ...

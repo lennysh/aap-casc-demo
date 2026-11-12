@@ -49,7 +49,8 @@
 
 - name: Read and parse var files without templating
   ansible.builtin.set_fact:
-    loaded_vars_combined: "{{ loaded_vars_combined | combine(parsed_content) }}"
+    # Several flat files can define the same var (e.g. controller_roles, aap_teams); append instead of overwrite.
+    loaded_vars_combined: "{{ loaded_vars_combined | combine(parsed_content, list_merge='append_rp') }}"
   vars:
     # 1. Read the raw text using the 'cat' pipe (to avoid templating)
     raw_content: "{{ lookup('pipe', 'cat ' + item) }}"
@@ -61,6 +62,36 @@
   loop_control:
     loop_var: item
   when: __files_to_process | default([]) | length > 0
+
+- name: Normalize variable names to the standard (AAP 2.5+) layout
+  ansible.builtin.set_fact:
+    loaded_vars_combined: >-
+      {{
+        (loaded_vars_combined | dict2items | rejectattr('key', 'eq', __alias.key) | items2dict)
+        | combine({
+            __alias.value.target:
+              (loaded_vars_combined[__alias.value.target] | default([]) or [])
+              + ((loaded_vars_combined[__alias.key] or []) | rename_keys(__alias.value.rename_keys | default({})))
+          })
+      }}
+  loop: "{{ flat_to_filetree_var_aliases | dict2items }}"
+  loop_control:
+    loop_var: __alias
+    label: "{{ __alias.key }} -=> {{ __alias.value.target }}"
+  when: __alias.key in loaded_vars_combined
+
+- name: Merge duplicate objects that share identity fields
+  ansible.builtin.set_fact:
+    loaded_vars_combined: >-
+      {{ loaded_vars_combined | combine({__merge.key: loaded_vars_combined[__merge.key] | merge_by_key(__merge.value)}) }}
+  loop: "{{ flat_to_filetree_merge_keys | dict2items }}"
+  loop_control:
+    loop_var: __merge
+    label: "{{ __merge.key }} by {{ __merge.value | join('+') }}"
+  when:
+    - __merge.key in loaded_vars_combined
+    - loaded_vars_combined[__merge.key] is sequence
+    - loaded_vars_combined[__merge.key] is not string
 
 - name: Filter map to only include variables that exist
   ansible.builtin.set_fact:

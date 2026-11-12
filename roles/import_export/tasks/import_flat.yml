@@ -1,0 +1,77 @@
+---
+# Flattened layout: load every YAML file under common/ (unless import_common is false) and
+# <env>/imports/, recursively, common/ first. Unlike a plain `include_vars: dir:`, a variable
+# defined in several files is merged instead of replaced: lists are appended and dicts are
+# combined (later files win per key); scalars keep the last value. This matches filetree mode,
+# where objects from common/ and <env>/imports/ are both imported.
+#
+# Pass 1 loads each file normally, so every variable (e.g. ones referenced as "{{ var }}" from
+# other files) is defined before pass 2 merges the variables that appear in more than one file.
+- name: Find flattened variable files for AAP {{ casc_aap_version }}
+  ansible.builtin.find:
+    paths: "{{ ([common_dir] if import_common | default(true) | bool else []) + [env_dir ~ '/imports'] }}"
+    patterns:
+      - "*.yml"
+      - "*.yaml"
+    excludes:
+      - "ignore_*"
+    file_type: file
+    recurse: true
+  register: __import_flat_found
+  tags:
+    - always
+
+- name: Order flattened variable files for AAP {{ casc_aap_version }}
+  vars:
+    __paths: "{{ __import_flat_found.files | map(attribute='path') | list }}"
+    __common_re: "^{{ common_dir | regex_escape }}/"
+  ansible.builtin.set_fact:
+    __import_flat_files: >-
+      {{ (__paths | select('match', __common_re) | sort) + (__paths | reject('match', __common_re) | sort) }}
+  tags:
+    - always
+
+- name: Load flattened variable files for AAP {{ casc_aap_version }}
+  ansible.builtin.include_vars:
+    file: "{{ __flat_file }}"
+  loop: "{{ __import_flat_files }}"
+  loop_control:
+    loop_var: __flat_file
+  no_log: "{{ aap_configuration_secure_logging | default(false) | bool }}"
+  tags:
+    - always
+
+- name: Read flattened variable files per file for AAP {{ casc_aap_version }}
+  ansible.builtin.include_vars:
+    file: "{{ __flat_file }}"
+    name: __import_flat_file_contents
+  loop: "{{ __import_flat_files }}"
+  loop_control:
+    loop_var: __flat_file
+  register: __import_flat_contents
+  no_log: "{{ aap_configuration_secure_logging | default(false) | bool }}"
+  tags:
+    - always
+
+- name: Merge variables defined in more than one flattened file for AAP {{ casc_aap_version }}
+  vars:
+    __per_file: >-
+      {{ __import_flat_contents.results | default([])
+         | map(attribute='ansible_facts.__import_flat_file_contents') | select('mapping') | list }}
+    __values: "{{ __per_file | selectattr(__flat_key, 'defined') | map(attribute=__flat_key) | list }}"
+    __all_lists: "{{ __values | reject('mapping') | select('iterable') | reject('string') | list | length == __values | length }}"
+    __all_dicts: "{{ __values | select('mapping') | list | length == __values | length }}"
+  ansible.builtin.set_fact:
+    "{{ __flat_key }}": >-
+      {{
+        (__values | ansible.builtin.flatten(levels=1)) if (__all_lists | bool)
+        else ((__values | ansible.builtin.combine) if (__all_dicts | bool) else (__values | last))
+      }}
+  loop: "{{ __per_file | map('list') | ansible.builtin.flatten(levels=1) | ansible.builtin.unique }}"
+  loop_control:
+    loop_var: __flat_key
+  when: __values | length > 1
+  no_log: "{{ aap_configuration_secure_logging | default(false) | bool }}"
+  tags:
+    - always
+...

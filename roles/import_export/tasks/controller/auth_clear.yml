@@ -9,4 +9,5 @@
   when: __clear_token | default(false)
   tags:
     - always
+  check_mode: false
 ...

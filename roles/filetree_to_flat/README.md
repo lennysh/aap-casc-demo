@@ -14,7 +14,7 @@ This allows you to manage your Configuration as Code in a granular file tree str
 Requirements
 ------------
 
-* Ansible 2.15.0 or later.
+* ansible-core 2.16 or later.
 * The `lookup('pipe', 'cat ...')` feature must be available on the Ansible controller, as this role uses it to read files without triggering Jinja2 templating.
 * The `type_debug` filter must be available (standard in modern Ansible).
 
@@ -30,11 +30,12 @@ All variables are set in the playbook that calls this role or in `defaults/main.
     * Example: `"orgs_vars/OCP0Lab/AAP26/imports"`
 
 * `filetree_to_flat_map`
-    * **Required:** A dictionary mapping the final **variable name** to create (e.g., `controller_projects`) to the **directory** to scan for its files (e.g., `controller_projects.d`). This map is defined in `defaults/main.yml`.
+    * **Required:** A dictionary mapping the final **variable name** to create (e.g., `controller_projects`) to the **directory** to scan for its files (e.g., `controller_projects.d`). The default in `defaults/main.yml` covers every object type in the standard layout. Note that a few keys differ from their folder names, for example `controller_templates: controller_job_templates.d`, `controller_workflows: controller_workflow_job_templates.d` and `controller_notifications: controller_notification_templates.d`.
     * Example:
 ```yaml
 filetree_to_flat_map:
   controller_projects: controller_projects.d
+  controller_templates: controller_job_templates.d
   aap_organizations: aap_organizations.d
   gateway_settings: gateway_settings.d
 ```
@@ -121,7 +122,7 @@ This playbook merges all files and saves them to a new `exports_merged` director
 License
 -------
 
-GPL-3.0-or-later
+MIT
 
 Author Information
 ------------------

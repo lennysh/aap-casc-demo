@@ -14,6 +14,7 @@ collections:
   - name: ansible.platform
     source: https://github.com/ansible/ansible.platform.git
     type: git
+    version: 'stable-2.6'
 
   - name: ansible.eda
     source: https://github.com/ansible/event-driven-ansible.git

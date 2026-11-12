@@ -9,13 +9,12 @@ collections:
     type: git
 
   # - name: ansible.controller
-  #   source: https://github.com/ansible/awx.git
+  #   source: https://github.com/ansible/awx.git#/awx_collection/
   #   type: git
-  #   folder: awx_collection
   #   version: 'devel'
 
   - name: ansible.controller
-    version: '>=4.7,<4.8'
+    version: '>=4.8,<4.9'
 
   - name: ansible.platform
     source: https://github.com/ansible/ansible.platform.git

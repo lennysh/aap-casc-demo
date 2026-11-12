@@ -13,6 +13,8 @@ usage() {
 }
 
 orgs_vars_dir="$parent_dir/orgs_vars"
+# shellcheck source=scripts/vault_functions.sh
+source "$parent_dir/scripts/vault_functions.sh"
 
 # --- Initial Argument Validation ---
 # Ensure the two mandatory arguments are provided.
@@ -82,10 +84,17 @@ if [[ ! -f "$file_to_edit" ]]; then
         echo "Error: Vault template not found: $template"
         exit 1
     fi
+    ensure_vault_password --confirm
     echo "Creating new vault from template: $template"
     cp "$template" "$file_to_edit"
-    echo "Encrypting new vault (you will set the vault password)..."
-    ansible-vault encrypt "$file_to_edit"
+    echo "Encrypting new vault..."
+    if ! ansible-vault encrypt "$file_to_edit"; then
+        rm -f "$file_to_edit"
+        echo "Error: Failed to encrypt $file_to_edit"
+        exit 1
+    fi
+else
+    ensure_vault_password "$file_to_edit"
 fi
 
 echo "Opening vault file: $file_to_edit"

@@ -5,6 +5,8 @@ set -euo pipefail
 # Get the directory of the script
 parent_dir=$(dirname "$(readlink -f "$0")")
 script_vars_dir="$parent_dir/script_vars"
+# shellcheck source=scripts/vault_functions.sh
+source "$parent_dir/scripts/vault_functions.sh"
 full_aap_folders=()
 
 # --- Function to display usage ---
@@ -228,21 +230,29 @@ else
     echo "  -> 'vars.yml' file already exists."
 fi
 
+# --- Vault password: prompt once (with confirmation) if a new vault is about to be created
+# and no vault password file is configured/present. Both new vaults use the same password.
+common_vault_file="$org_base_dir/common/vault.yml"
+vault_common_template_file="$parent_dir/templates/vault_common.yml"
+if [[ ! -f "$vault_file" ]] || { [[ ! -f "$common_vault_file" ]] && [[ -f "$vault_common_template_file" ]]; }; then
+    if [[ -f "$common_vault_file" ]]; then
+        echo "  -> Use the same vault password as the existing common vault ($common_vault_file)."
+    fi
+    ensure_vault_password --confirm
+fi
+
 # --- Component 3: vault.yml (Secrets) ---
 if [[ ! -f "$vault_file" ]]; then
     echo "  -> Creating missing 'vault.yml' file from template..."
     cp "$vault_template_file" "$vault_file"
     echo "  -> Encrypting new vault file..."
     
-    # --- START FIX: Silence ansible-vault and print our own message ---
-    ansible-vault encrypt "$vault_file" > /dev/null
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to encrypt vault. Please check your password and try again."
-        # Don't cleanup, as we might be repairing a partial env
+    if ! ansible-vault encrypt "$vault_file" > /dev/null; then
+        rm -f "$vault_file"
+        echo "Error: Failed to encrypt the vault (see the message above). Re-run this script to try again."
         exit 1
     fi
     echo "  -> Encryption successful."
-    # --- END FIX ---
     
     new_vault_created=true # Set flag to open editor
 else
@@ -250,8 +260,6 @@ else
 fi
 
 # --- Component 4: common vault (org-level secrets) ---
-common_vault_file="$org_base_dir/common/vault.yml"
-vault_common_template_file="$parent_dir/templates/vault_common.yml"
 if [[ ! -f "$common_vault_file" ]]; then
     if [[ -f "$vault_common_template_file" ]]; then
         echo "  -> Creating missing common vault from template..."
@@ -273,7 +281,7 @@ echo ""
 echo "✅ Environment '$env' (in organization: $org) is ready."
 
 if [[ "$new_vault_created" = true ]]; then
-    echo "Opening new vault file for you to edit. If prompted, please enter the vault password you just created."
+    echo "Opening new vault file for you to edit."
     ansible-vault edit "$vault_file"
     echo ""
     echo "🎉 Setup complete! You can now use '$env' with the export/import scripts."

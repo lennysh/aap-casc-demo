@@ -10,6 +10,31 @@
   tags:
     - always
 
+# infra.controller_configuration 3.x pipes `omit` through regex_replace for notification
+# messages, inventory/host/group variables, credential type injectors and inventory source
+# source_vars. On ansible-core 2.19+ that sends the literal string "<<Omit>>" to the API,
+# so any object missing one of those fields fails to import.
+- name: "{{ __task_name }}"
+  vars:
+    __task_name: "AAP {{ casc_aap_version }} | Preflight | Check ansible-core compatibility"
+  ansible.builtin.assert:
+    that:
+      - ansible_version.full is version('2.19', '<')
+    fail_msg: >-
+      AAP 2.4 import requires ansible-core < 2.19 (found {{ ansible_version.full }}).
+      infra.controller_configuration 3.x is not compatible with ansible-core 2.19+ and fails on
+      objects without notification messages / inventory, host or group variables / credential
+      type injectors / inventory source source_vars. Run with ansible-navigator (the AAP 2.4 EE),
+      or with --playbook from a virtualenv with ansible-core 2.18 or older.
+      Set import_export_allow_unsupported_core=true to skip this check.
+    quiet: true
+  when:
+    - __auth_mode == 'controller'
+    - (import_export_mode | trim | lower) == 'import'
+    - not (import_export_allow_unsupported_core | default(false) | bool)
+  tags:
+    - always
+
 - name: Block to handle Auth
   block:
     - name: "{{ __task_name }}"

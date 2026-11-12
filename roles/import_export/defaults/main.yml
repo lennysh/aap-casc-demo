@@ -5,4 +5,53 @@ aap_configuration_async_retries: 60
 aap_configuration_secure_logging: false
 aap_hostname: "{{ vault_aap_hostname | default(lookup('env', 'AAP_HOST')) }}"
 aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VERIFY_SSL')) }}"
+
+# AAP 2.4 import fails on ansible-core 2.19+ (see the preflight check in tasks/main.yml).
+# Set to true to skip that check, e.g. if every object defines all the affected fields.
+import_export_allow_unsupported_core: false
+
+# Cross-version variable aliases, applied on import (see tasks/import_var_aliases.yml).
+# Lets config exported from one AAP version be imported into another without edits:
+# any YAML file under common/ or <env>/imports/ that defines a `source` variable has its
+# items appended to `target` (after optional key renames) before dispatch runs.
+import_export_var_aliases:
+  # AAP 2.4 import (infra.controller_configuration) also accepts 2.5+ names
+  controller:
+    - {target: controller_organizations, source: aap_organizations}
+    - {target: controller_organizations, source: gateway_organizations}
+    - {target: controller_teams, source: aap_teams}
+    - target: controller_user_accounts
+      source: aap_user_accounts
+      rename_keys:
+        is_platform_auditor: is_system_auditor
+    - {target: controller_applications, source: aap_applications}
+  # AAP 2.5+ import (infra.aap_configuration) also accepts 2.4 names
+  gateway:
+    - {target: aap_organizations, source: controller_organizations}
+    # filetree_read already folds these in; needed for flattened mode (duplicates are merged)
+    - {target: aap_organizations, source: gateway_organizations}
+    - {target: aap_teams, source: controller_teams}
+    - target: aap_user_accounts
+      source: controller_user_accounts
+      rename_keys:
+        superuser: is_superuser
+        auditor: is_platform_auditor
+        is_auditor: is_platform_auditor
+        is_system_auditor: is_platform_auditor
+    - {target: aap_applications, source: controller_applications}
+
+# After aliasing, entries in these variables that share the identity fields are merged
+# (first occurrence wins; later ones only add missing fields). This also collapses the
+# duplicate orgs older 2.5+ exports produced (aap_organizations.d + gateway_organizations.d).
+import_export_merge_keys:
+  controller:
+    controller_organizations: [name]
+    controller_teams: [name, organization]
+    controller_user_accounts: [username]
+    controller_applications: [name, organization]
+  gateway:
+    aap_organizations: [name]
+    aap_teams: [name, organization]
+    aap_user_accounts: [username]
+    aap_applications: [name, organization]
 ...

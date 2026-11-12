@@ -1,2 +1,7 @@
 ---
-# Common (org-level) vault. Add secrets referenced by org/common vars here.
+# Common (organization-level) vault: secrets shared by every environment of this organization.
+# Loaded on import when import_common is true. Edit with: ./vault-edit.sh <org> common
+#
+# Example:
+# vault_servicenow_password: "xxxxxxxx" #sensitive
+...

@@ -1,5 +1,10 @@
 # Migration Guide: infra.controller_configuration, infra.eda_configuration, and galaxy.galaxy to infra.aap_configuration
 
+> [!NOTE]
+> **This is a collection-level reference** for people writing their own playbooks or configuration against the upstream collections. It maps roles and variables from `infra.controller_configuration`, `infra.eda_configuration` and `galaxy.galaxy` to `infra.aap_configuration`.
+>
+> **If you're moving a configuration with this project's `export.sh` / `import.sh`, you don't need this page.** The translation is handled for you. See [Migrating Between AAP Versions](MIGRATING_BETWEEN_AAP_VERSIONS.md) instead.
+
 ## Overview
 
 This document provides a comprehensive guide for migrating from:

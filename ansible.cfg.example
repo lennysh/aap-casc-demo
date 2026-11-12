@@ -1,5 +1,12 @@
+# Copy to ansible.cfg (ignored by Git) and adjust.
+
 [defaults]
+# Uncomment to read the vault password from a file instead of being prompted.
+# Create the file first: echo 'my-vault-password' > .vault_pass.txt && chmod 600 .vault_pass.txt
 #vault_password_file=.vault_pass.txt
+
+# Collection sources used by ./install_collections.sh. The certified and validated servers
+# need a Red Hat Automation Hub token: https://console.redhat.com/ansible/automation-hub/token
 
 [galaxy]
 server_list = certified, validated, galaxy

@@ -9,354 +9,334 @@
 
 ---
 
+
 ## 📖 Table of Contents
 
-* 🧐 [What is This Tool?](#-what-is-this-tool)
-* ✨ [Why Use "Configuration as Code" (CaSC)?](#-why-use-configuration-as-code-casc)
-* 🚀 [Core Features](#-core-features)
-* ⚙️ [How It Works](#-how-it-works)
-* 🛠️ [Prerequisites](#-prerequisites)
-* 🏁 [Step 1: Setup & Configuration](#-step-1-setup--configuration)
-* 👟 [Step 2: Usage / Examples](#-step-2-usage--examples)
-    * [Exporting Configuration](#exporting-configuration)
-    * [Importing Configuration](#importing-configuration)
-* 💡 [Tips and Advanced Usage](#-tips-and-advanced-usage)
-    * [ansible-playbook vs ansible-navigator](#ansible-playbook-vs-ansible-navigator)
-    * [Versioned collections](#versioned-collections)
-    * [Environment vars.yml](#environment-varsyml)
+* 🧐 [What Is This?](#-what-is-this)
+* ✨ [Why Configuration as Code?](#-why-configuration-as-code)
+* 🛠 [Prerequisites](#-prerequisites)
+* 🚀 [Quick Start](#-quick-start)
+* 👟 [Everyday Usage](#-everyday-usage)
+    * [Exporting](#exporting)
+    * [Importing](#importing)
+    * [Choosing what to export or import (tags)](#choosing-what-to-export-or-import-tags)
+    * [Dry runs](#dry-runs)
+* 🗂 [How Your Configuration Is Organized](#-how-your-configuration-is-organized)
+* ⚙ [Configuration Reference](#-configuration-reference)
+    * [Environment `vars.yml`](#environment-varsyml)
+    * [Vault files](#vault-files)
+    * [Vault password: prompt or password file](#vault-password-prompt-or-password-file)
+    * [Environment variables](#environment-variables)
+* 🏃 [Running with ansible-playbook or ansible-navigator](#-running-with-ansible-playbook-or-ansible-navigator)
+* 🧰 [Other Scripts and Tab Completion](#-other-scripts-and-tab-completion)
 * 📚 [Documentation](#-documentation)
+* 📦 [Supported AAP Versions](#-supported-aap-versions)
 * 🔗 [Useful Links](#-useful-links)
 * 🤝 [Contributing](#-contributing)
 * 🙏 [Thank You](#-thank-you)
-* 📦 [Supported AAP Versions](#-supported-aap-versions)
 * 📜 [License](#-license)
 
 ---
 
-## 🧐 What is This Tool?
+## 🧐 What Is This?
 
-This project is a set of Ansible playbooks and helper scripts designed to help you manage your **Ansible Automation Platform (AAP)** setup like code.
+A set of Ansible playbooks and helper scripts for managing your **Ansible Automation Platform (AAP)** configuration as code. It does two things:
 
-It has two primary functions:
+1. **Export:** reads the current configuration from an AAP instance (organizations, teams, users, credentials, projects, inventories, job templates, workflows, schedules, EDA, Automation Hub, gateway settings, and more) and saves it as human-readable YAML files.
+2. **Import:** applies YAML files to an AAP instance, creating or updating everything so it matches the files.
 
-1.  **EXPORT:** Read the *current configuration* from your AAP instance (like Job Templates, Credentials, Inventories, Projects, etc.) and save them as human-readable YAML files.
-2.  **IMPORT:** Take those YAML configuration files and *apply them* to an AAP instance, automatically creating or updating resources to match what's in the files.
+It works with **AAP 2.4 through 2.7**, and every version exports the same folder layout. You can export from one AAP version and import into another, for example when moving from 2.4 to 2.6.
 
-This process is often called **Configuration as Code (CaSC)**.
+New to the terminology? See [Concepts and Glossary](docs/CONCEPTS.md).
 
-## ✨ Why Use "Configuration as Code" (CaSC)?
+## ✨ Why Configuration as Code?
 
-If you're new to CaSC, here's why it's so powerful:
+* **Version control:** keep your entire AAP configuration in Git, with a full history of who changed what and when.
+* **Review before apply:** use pull requests to review and approve changes before they reach AAP.
+* **Consistency:** keep dev, test, and prod configured the same way, sharing what should be shared.
+* **Migration:** move a configuration between instances or AAP versions.
+* **Disaster recovery:** rebuild an instance and re-apply its configuration in minutes.
 
-* **Version Control:** You can store your *entire* AAP configuration in Git. This lets you see a full history of who changed what and when.
-* **Migration:** Easily move your setup from one environment to another (e.g., from a 'test' server to a 'production' server).
-* **Consistency:** Ensure your 'dev' and 'prod' environments are configured identically, reducing "it worked in test" problems.
-* **Disaster Recovery:** If a server fails, you can rebuild it and re-apply your configuration from code in minutes.
-* **Auditing & Review:** You can use "Pull Requests" to review and approve changes to your AAP configuration *before* they are applied.
+## 🛠 Prerequisites
 
-## 🚀 Core Features
+* **Bash 4.3 or newer** (the scripts use associative arrays and namerefs).
+* **Git**, to clone this repository and to version your configuration.
+* **Ansible** (`ansible-core`) for the default `ansible-playbook` mode. The collections each AAP version needs are installed into this repo by `./install_collections.sh` (see [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md)).
+    * Importing into **AAP 2.4** needs **ansible-core 2.18 or older** (or the AAP 2.4 Execution Environment). See [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md#ansible-core-requirements).
+* An **AAP user** that can read (export) or change (import) the objects you manage. An administrator account is the simplest option.
 
-* **Export from AAP:** Dumps your live AAP configuration into structured YAML files.
-* **Import to AAP:** Configures an AAP instance based on your YAML files.
-* **Version-Aware:** Includes different logic for different versions of AAP (e.g., 2.4, 2.5, 2.6).
-* **Granular Control:** Uses Ansible **tags** to let you export or import only specific pieces of your configuration (e.g., just `controller_projects` or `eda_credentials`).
+**Optional:** `ansible-navigator` plus **Podman** or **Docker**, to run inside an Execution Environment instead of using local collections. See [Running with ansible-playbook or ansible-navigator](#-running-with-ansible-playbook-or-ansible-navigator).
 
-## ⚙️ How It Works
+## 🚀 Quick Start
 
-This tool provides two main wrapper scripts, `export.sh` and `import.sh`, which are the easiest way to get started.
+This walk-through exports an existing AAP instance and imports it again. It's the quickest way to see how everything fits together.
 
-These scripts are user-friendly wrappers for the underlying Ansible playbooks (`import_export.yml` in export or import mode). They automatically:
-1.  Read your environment's **AAP version** from `orgs_vars/<org_name>/<env_name>/vars.env`.
-2.  Read your environment's credentials from an encrypted Ansible Vault.
-3.  Validate your command-line tags against the version-specific list in `script_vars/<version>/`.
-4.  Run the playbook using **`ansible-playbook`** by default (with versioned collections from `collections/<version>/`), or **`ansible-navigator`** with an Execution Environment if you pass `--navigator`.
+1. **Clone the repository**
 
-You don't need to be an Ansible expert to use them, but you *do* need the prerequisite tools installed.
-
-## 🛠️ Prerequisites
-
-Before you begin, you **must** have the following installed on your local machine:
-
-1.  **Ansible** (for **`ansible-playbook`**, the default): Used with versioned collections in `collections/<version>/`. Install collections per AAP version with `./install_collections.sh`; use `./list_collections.sh` to verify what is installed (see [Versioned collections](#versioned-collections)).
-2.  **`Bash 4.3+`**: Required for script features (associative arrays and namerefs).
-3.  **Git**: To clone this repository.
-
-**Optional (for Execution Environment runs):** If you prefer to run with **`ansible-navigator`** and an EE, you need **`ansible-navigator`** and **Podman** or **Docker**. You must **create the Execution Environments yourself** (e.g. build or pull images that include the required collections and dependencies). You must also **update the config** so the scripts use your EE: set the `execution_environment` variable in the version-specific script vars file (see [Using ansible-navigator (EE)](#using-ansible-navigator-ee) below). Then pass `--navigator` to `export.sh` or `import.sh`.
-
----
-
-## 🏁 Step 1: Setup & Configuration
-
-1.  **Clone this repository:**
     ```bash
     git clone https://github.com/lennysh/aap-casc-demo.git
     cd aap-casc-demo
     ```
 
-2.  **Run the Initialization Script:**
-    This tool now includes an interactive script to get you started. Run the `start_here.sh` script and provide an organization name and environment name (e.g., `OCP0Lab` and `my_prod`).
+2. **Install the collections** for the AAP version(s) you use. Some of them (`ansible.controller`, `ansible.platform`) come from Red Hat Automation Hub, so first copy `ansible.cfg.example` to `ansible.cfg` and paste your [Automation Hub token](https://console.redhat.com/ansible/automation-hub/token) into the two `token=` lines:
 
     ```bash
-    chmod +x start_here.sh
-    ./start_here.sh OCP0Lab my_prod
+    cp ansible.cfg.example ansible.cfg     # then add your Automation Hub token
+    ./install_collections.sh 2.6           # or: ./install_collections.sh   (all versions)
     ```
 
-3.  **What This Script Does:**
-    The `start_here.sh` script will automatically:
-    * **Create the organization directory** if it doesn't exist (e.g., `orgs_vars/OCP0Lab/`).
-    * **Ask you to select an AAP version** (e.g., 2.6, 2.5) for this environment.
-    * Create the full directory structure: `orgs_vars/OCP0Lab/my_prod/imports` and `orgs_vars/OCP0Lab/my_prod/exports`.
-    * Create the common directory: `orgs_vars/OCP0Lab/common/` for shared configurations.
-    * Save your version choice to `orgs_vars/OCP0Lab/my_prod/vars.env`.
-    * Copy `templates/vars.yml` to `orgs_vars/OCP0Lab/my_prod/vars.yml` (export/import behavior options; see [Environment vars.yml](#environment-varsyml) below).
-    * Copy the `templates/vault.yml` to `orgs_vars/OCP0Lab/my_prod/vault.yml`.
-    * Encrypt the new `vault.yml` using `ansible-vault`. (It will ask you to create a new vault password.)
-    * Open the new `vault.yml` in your editor so you can add your AAP hostname and credentials.
+    Skip this step if you'll use `--navigator` with an Execution Environment.
 
-4.  **(Optional) Edit Your Vault Later:**
-    If you need to edit your encrypted vault file again later, you can use the `vault-edit.sh` script:
+3. **Create an organization and environment.** An *organization* here is just a folder that groups related environments (for example `MyCompany`). An *environment* is one AAP instance (for example `prod`). See [Concepts](docs/CONCEPTS.md#organization-and-environment).
 
     ```bash
-    chmod +x vault-edit.sh
-    ./vault-edit.sh OCP0Lab my_prod
+    ./start_here.sh MyCompany prod
     ```
 
-## 👟 Step 2: Usage / Examples
+    The script asks for the AAP version and whether to use flattened mode (answer **n** unless you know you want it). It then creates the folders and asks you to choose a vault password. Finally it opens the new encrypted `vault.yml` in your editor: set `vault_aap_hostname` and either `vault_aap_username` / `vault_aap_password` or `vault_aap_token`.
 
-The two main scripts are `./export.sh` and `./import.sh`. You must make them executable first:
+4. **Export everything:**
+
+    ```bash
+    ./export.sh MyCompany prod -a
+    ```
+
+    The export lands in `orgs_vars/MyCompany/prod/exports/mycompany_prod_export_<timestamp>/`.
+
+5. **Copy the export into your imports folder** and review it:
+
+    ```bash
+    cp -r orgs_vars/MyCompany/prod/exports/mycompany_prod_export_*/filetree_version/* orgs_vars/MyCompany/prod/imports/
+    ```
+
+    (If you've exported more than once, replace the `*` with the timestamp of the export you want.)
+
+    Exported secrets (passwords, tokens, keys) come out as placeholders like `{{ vault_controller_credentials_my_cred_password }}`. Add the real values to your vault before importing. See [Handling secrets](docs/HOW_TO.md#handle-secrets).
+
+6. **Do a dry run, then import:**
+
+    ```bash
+    ./import.sh MyCompany prod -a --check     # shows what would change
+    ./import.sh MyCompany prod -a
+    ```
+
+7. **Commit `orgs_vars/` to your own Git repository.** This repo's `.gitignore` excludes `orgs_vars/` and vault files by default, so keep your configuration in a private repo (or adjust `.gitignore` deliberately). See [How-To: put your configuration under Git](docs/HOW_TO.md#put-your-configuration-under-git).
+
+## 👟 Everyday Usage
+
+### Exporting
 
 ```bash
-chmod +x export.sh import.sh
+./export.sh <org> <env> (-a | -t <tags>) [--playbook | --navigator] [--check] [-o <dir>]
 ```
 
-### Exporting Configuration
+| Option | Meaning |
+|---|---|
+| `-a`, `--all` | Export everything supported for the environment's AAP version. |
+| `-t`, `--tags "<t1>,<t2>"` | Export only these object types (see [tags](#choosing-what-to-export-or-import-tags)). |
+| `-o`, `--export-path <dir>` | Write the export here instead of `orgs_vars/<org>/<env>/exports/<org>_<env>_export_<timestamp>/`. |
+| `--playbook` / `--navigator` | Run with `ansible-playbook` (default) or `ansible-navigator`. |
+| `-C`, `--check` | Ansible check mode. |
 
-This command reads from your AAP instance and saves the files locally. **Note that you no longer need to provide the version number.**
+Every export contains two copies of the same data:
 
-* **Command:** `./export.sh <org_name> <environment_name> [--playbook|--navigator] [options]`
-* **Arguments:**
-    * `<org_name>`: The name of your organization (e.g., `OCP0Lab`, `TAMLab`, `HomeLab`).
-    * `<environment_name>`: The name of your config directory (e.g., `my_prod`, `AAP25`).
-    * `--playbook`: Use `ansible-playbook` with versioned collections (default if `CASC_USE_PLAYBOOK` is set).
-    * `--navigator`: Use `ansible-navigator` with the Execution Environment.
-    * `[options]`:
-        * `-a` or `--all`: Export *all* supported configurations.
-        * `-t "tag1,tag2"`: Export *only* the specific items you list.
-        * `-o <dir>` or `--export-path <dir>`: Write the export under this directory instead of the default timestamped folder under `orgs_vars/<org_name>/<environment_name>/exports/`.
+* **`filetree_version/`**: one file per object, grouped into one folder per object type (for example `controller_projects.d/My Project.yml`). Best for Git and code review. **Use this by default.**
+* **`flat_version/`**: one file per object type, with all objects of that type in it. On AAP 2.5+ it also includes `env_variables.yml`, which lists every secret placeholder found in the export.
 
-**Example: Export only Projects and Credentials**
-```bash
-./export.sh OCP0Lab my_prod -t "controller_projects,controller_credentials"
-```
-* **What this does:**
-    1.  Reads `orgs_vars/OCP0Lab/my_prod/vars.env` to find this env is for AAP 2.6 (or whichever version you selected).
-    2.  Reads connection details from your encrypted `orgs_vars/OCP0Lab/my_prod/vault.yml`.
-    3.  Connects to your AAP instance.
-    4.  Saves the result into a new directory. By default this is timestamped under `orgs_vars/OCP0Lab/my_prod/exports/ocp0lab_my_prod_export_YYYYMMDD_HHMMSS/`; use `-o` / `--export-path` to choose a different destination. **Export always produces both** **`flat_version/`** (single-file-per-resource YAML) and **`filetree_version/`** (hierarchical layout). Which one you copy into `imports` for a later import is determined by the **`flatten_output`** setting in `vars.yml` (see [Importing](#importing-configuration) and [Environment vars.yml](#environment-varsyml)).
+To export only one AAP organization, set `organization_filter` in the environment's [`vars.yml`](#environment-varsyml).
 
----
-
-### Importing Configuration
-
-This command reads from your local files and configures your AAP instance.
-
-* **Command:** `./import.sh <org_name> <environment_name> [--playbook|--navigator] [options]`
-* **Arguments:**
-    * `<org_name>` and `<environment_name>`: Same as export.
-    * `--playbook` / `--navigator`: Same as export (default is playbook with versioned collections).
-    * `[options]`:
-        * `-a` or `--all`: Import *all* configurations from the environment's `imports` directory and the organization's `common` directory.
-        * `-t "tag1,tag2"`: Import *only* the specific items you list.
-
-**Example: Import only Projects**
-
-1.  **First, copy your config files:** Before you can import, place your configuration files into the `imports` directory for your environment. Export always produces both `flat_version/` and `filetree_version/`. **Which of those two folders you copy from** depends on the **`flatten_output`** setting in your environment's **`vars.yml`** (e.g. `orgs_vars/OCP0Lab/my_prod/vars.yml`):
-    * **`flatten_output: true`** → Copy from the export's **`flat_version/`** folder. When importing with flat layout, the import process reads **every YAML file it finds recursively** under `imports` (and under `common` when `import_common` is true). You can put YAML files in the root of `imports/` or in any subfolders—both work.
-    * **`flatten_output: false`** → Copy from the export's **`filetree_version/`** folder. The import expects the filetree layout (e.g. `controller_projects.d/`, `gateway_teams.d/`, etc.); keep that structure when copying.
-    ```bash
-    # Example (flatten_output: true): copy from flat_version
-    # cp orgs_vars/OCP0Lab/my_prod/exports/ocp0lab_my_prod_export_*/flat_version/controller_projects.yml orgs_vars/OCP0Lab/my_prod/imports/
-
-    # Example (flatten_output: false): copy the filetree_version layout
-    # cp -r orgs_vars/OCP0Lab/my_prod/exports/ocp0lab_my_prod_export_*/filetree_version/* orgs_vars/OCP0Lab/my_prod/imports/
-    ```
-
-2.  **Run the import script:**
-    ```bash
-    ./import.sh OCP0Lab my_prod -t "controller_projects"
-    ```
-* **What this does:**
-    1.  Reads `orgs_vars/OCP0Lab/my_prod/vars.env` to get the version.
-    2.  Reads connection details from your encrypted `orgs_vars/OCP0Lab/my_prod/vault.yml`.
-    3.  Connects to your AAP instance.
-    4.  Applies *only* the configurations found that match the `controller_projects` tag from both the environment's `imports` directory and the organization's `common` directory.
-
-> **💡 How to find all available tags?**
->
-> The available tags are different for each AAP version and are now defined in the `script_vars/` directory.
->
-> To see a full list of supported tags, run the script with just an organization name and environment name and no options (like `-a` or `-t`).
->
-> ```bash
-> ./export.sh OCP0Lab my_prod
-> ```
->
-> This will show the `Usage:` help text, which dynamically lists all valid tags for the version associated with `my_prod`.
-
-## 💡 Tips and Advanced Usage
-
-### ansible-playbook vs ansible-navigator
-
-By default, the scripts use **`ansible-playbook`** with versioned collections from `collections/<version>/` (e.g. `collections/2.5/`). You must install those collections first (see [Versioned collections](#versioned-collections)).
-
-To use **`ansible-navigator`** with an Execution Environment instead (no local collections), pass `--navigator`:
+### Importing
 
 ```bash
-./export.sh OCP0Lab my_prod --navigator -t "controller_projects"
+./import.sh <org> <env> (-a | -t <tags>) [--playbook | --navigator] [--check]
 ```
 
-#### Using ansible-navigator (EE)
+Import reads YAML from two places and applies it to the environment's AAP instance:
 
-If you use **`--navigator`**, you are responsible for:
+* `orgs_vars/<org>/common/`: configuration shared by every environment in the organization (skip it with `import_common: false`).
+* `orgs_vars/<org>/<env>/imports/`: configuration for this environment only.
 
-1. **Creating the Execution Environments ahead of time.** The scripts do not build or pull an EE for you. You must build (or otherwise obtain) container images that include the required Ansible collections and dependencies for each AAP version you use (e.g. `infra.aap_configuration`, `infra.aap_configuration_extended`, platform collections).
+Objects are matched by name (and organization, where relevant). Existing objects are updated and missing ones are created. Objects that exist in AAP but not in your files are left alone. To remove an object, set `state: absent` on it (see [How-To](docs/HOW_TO.md#delete-an-object)).
 
-2. **Pointing the scripts at your EE image.** Set the **`execution_environment`** variable in the **script vars** file for each AAP version:
-   - **File:** `script_vars/<version>/vars.env` (e.g. `script_vars/2.5/vars.env`, `script_vars/2.6/vars.env`).
-   - **Variable:** `execution_environment="<your-ee-image>"` (e.g. a Quay or registry URL, or a local image name).
-   - The scripts pass this value to `ansible-navigator` as `--execution-environment-image`. If `execution_environment` is missing when you run with `--navigator`, the scripts will error.
+### Choosing what to export or import (tags)
 
-You can set the environment variable **`CASC_USE_PLAYBOOK`** to `1`, `true`, or `yes` to prefer playbook; leave it unset or set to something else to prefer navigator. The `--playbook` and `--navigator` flags override the environment variable.
+Each object type has a tag (for example `controller_projects`, `gateway_teams`, `eda_projects`). Run a script with just the org and env to see every valid tag for that environment's AAP version:
 
-### Versioned collections
+```bash
+./export.sh MyCompany prod
+./import.sh MyCompany prod
+```
 
-When using **`ansible-playbook`** (the default), each AAP version uses its own self-contained collection directory under `collections/<version>/`. Two helper scripts manage that layout:
+Combine tags with commas: `-t "controller_projects,controller_job_templates"`. On AAP 2.5+, export also accepts the category tags `controller`, `gateway`, `eda` and `hub`. AAP 2.4 uses shorter tag names (for example `projects`). The full lists are in [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md#tags).
+
+> [!TIP]
+> When importing with tags, remember dependencies. A job template needs its project, inventory and credentials to exist already, so import those first (or include their tags too).
+
+### Dry runs
+
+`--check` runs Ansible in check mode: the import reports what it *would* create or change without changing anything. It's a good habit before every import into a shared environment.
+
+## 🗂 How Your Configuration Is Organized
+
+```text
+orgs_vars/
+└── MyCompany/                         # "organization": a group of related environments
+    ├── common/                        # shared by every environment below
+    │   ├── vault.yml                  # encrypted secrets shared by all environments
+    │   ├── controller_credential_types.d/
+    │   └── controller_projects.d/
+    ├── dev/                           # one environment = one AAP instance
+    │   ├── vars.env                   # AAP version for this environment
+    │   ├── vars.yml                   # import/export options
+    │   ├── vault.yml                  # encrypted connection details and secrets
+    │   ├── imports/                   # environment-specific configuration
+    │   │   ├── controller_job_templates.d/
+    │   │   └── aap_teams.d/
+    │   └── exports/                   # export output (timestamped folders)
+    └── prod/
+        └── ...
+```
+
+Each `<type>.d/` folder holds YAML files for one object type. A file can contain one object or many, and file names are up to you. What matters is the top-level key inside the file (for example `controller_projects:`). The [Folder Layout and Object Reference](docs/FOLDER_LAYOUT.md) lists every folder, its key, and examples.
+
+## ⚙ Configuration Reference
+
+### Environment `vars.yml`
+
+Each environment has a `vars.yml` (created from `templates/vars.yml`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `organization_filter` | unset | Export only this AAP organization (for example `'Default'`). Unset exports everything your user can see. |
+| `flatten_output` | `false` | Import layout. `false`: read the `<type>.d/` folder layout. `true`: read every YAML file under `imports/` (and `common/`) recursively, wherever it is; lists defined in several files are combined. Export always writes both layouts. |
+| `secrets_as_variables` | `true` | Export secrets as `{{ <prefix>_... }}` placeholders instead of AAP's `$encrypted$` marker. |
+| `secrets_as_variables_prefix` | `"vault"` | Prefix for those placeholder variable names. |
+| `import_common` | `true` | Also import `orgs_vars/<org>/common/`. Set to `false` to import only the environment's `imports/` folder. |
+
+The environment's `vars.env` holds `CASC_AAP_VERSION` (the AAP version) and `FLATTEN_OUTPUT`. Both are written by `start_here.sh`.
+
+### Vault files
+
+| File | Holds |
+|---|---|
+| `orgs_vars/<org>/<env>/vault.yml` | How to reach this AAP instance, plus environment-specific secrets. |
+| `orgs_vars/<org>/common/vault.yml` | Secrets shared by every environment in the organization (loaded on import). |
+
+Connection variables in the environment vault:
+
+| Variable | Meaning |
+|---|---|
+| `vault_aap_hostname` | AAP URL or hostname (on 2.5+, the platform gateway). |
+| `vault_aap_validate_certs` | `false` to accept self-signed certificates. |
+| `vault_aap_username` / `vault_aap_password` | Credentials. A temporary token is created for the run and deleted afterwards. |
+| `vault_aap_token` | Alternatively, an existing OAuth token (comment out username/password). |
+
+Use `./vault-edit.sh <org> <env>` to edit a vault (use `common` as the env for the shared vault) and `./vault-view.sh <org> <env>` to print it with password and token lines hidden.
+
+### Vault password: prompt or password file
+
+Scripts that need the vault password get it from the first of these that works:
+
+1. The **`CASC_VAULT_PASSWORD`** environment variable (handy for CI and other non-interactive runs).
+2. The **`ANSIBLE_VAULT_PASSWORD_FILE`** environment variable, if that file exists.
+3. **`vault_password_file`** in the `[defaults]` section of the active `ansible.cfg`, if the line is uncommented and the file exists. Ansible looks for `ansible.cfg` in `$ANSIBLE_CONFIG`, then this repo's `ansible.cfg`, then `~/.ansible.cfg`, then `/etc/ansible/ansible.cfg`.
+4. Otherwise, a **prompt**: once per run (twice when creating a new vault, to confirm). The password stays in memory for that run and is never written to disk. It's passed to `ansible-navigator` too.
+
+If a configured password file is missing, the script says so and prompts. If there's no terminal to prompt on, it stops and explains how to provide the password.
+
+**To stop typing the password**, keep it in a file (only in a trusted environment):
+
+```bash
+echo 'my-vault-password' > .vault_pass.txt && chmod 600 .vault_pass.txt
+cp ansible.cfg.example ansible.cfg      # then uncomment: vault_password_file=.vault_pass.txt
+```
+
+`.vault_pass.txt` and `ansible.cfg` are already in `.gitignore`. Alternatively, `export ANSIBLE_VAULT_PASSWORD_FILE=/path/to/.vault_pass.txt`.
+
+### Environment variables
+
+| Variable | Effect |
+|---|---|
+| `CASC_USE_PLAYBOOK` | Unset, `1`, `true` or `yes`: use `ansible-playbook` (default). Any other value: use `ansible-navigator`. The `--playbook` / `--navigator` flags override it. |
+| `CASC_VAULT_PASSWORD` | Vault password for non-interactive runs (see above). |
+| `ANSIBLE_VAULT_PASSWORD_FILE` | Standard Ansible vault password file setting. |
+| `CONTROLLER_REQUEST_TIMEOUT` | API timeout in seconds for exports (default `60`). Raise it for very large instances. |
+| `ANSIBLE_VERBOSITY` | Ansible output detail, for example `3` (same as `-vvv`) when troubleshooting. |
+
+## 🏃 Running with ansible-playbook or ansible-navigator
+
+**`ansible-playbook` (default):** uses your local `ansible-core` and the collections in `collections/<version>/`, which `./install_collections.sh` installs. Each AAP version has its own self-contained collection set, so versions never interfere with each other.
+
+**`ansible-navigator` (`--navigator`):** runs inside an Execution Environment (EE) container, so you don't need local collections. You provide the EE image (it must contain the collections for that AAP version) and set it in `script_vars/<version>/vars.env`:
+
+```bash
+execution_environment="registry.example.com/my-ee-casc-aap26:latest"
+```
+
+Details, the collections each version needs, and ansible-core requirements are in [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md).
+
+## 🧰 Other Scripts and Tab Completion
+
+Everything you run lives in the repository root. Internal helpers live in `scripts/` and aren't meant to be run directly.
 
 | Script | Purpose |
-|--------|---------|
-| **`install_collections.sh`** | Install collections from `collections/<version>/requirements.yml` into `collections/<version>/`. |
-| **`list_collections.sh`** | List collections installed in `collections/<version>/` for a single AAP version. |
+|---|---|
+| `start_here.sh <org> <env>` | Create (or repair) an environment: folders, `vars.env`, `vars.yml`, vaults. |
+| `export.sh` / `import.sh` | Export from / import to AAP. |
+| `vault-edit.sh <org> <env\|common>` | Create or edit a vault. |
+| `vault-view.sh <org> <env>` | Show a vault with secret lines hidden. |
+| `install_collections.sh [--git] [version ...]` | Install each AAP version's collections into `collections/<version>/`. |
+| `list_collections.sh <version>` | List the collections installed for a version. |
+| `autocomplete.sh` | Tab completion for org and env names (`source` it). |
 
-**Install collections**
+Utility playbooks for advanced use (`flat_to_filetree.yml`, `filetree_to_flat.yml`, `convert_roles.yml`) are covered in the [How-To guide](docs/HOW_TO.md).
 
-```bash
-chmod +x install_collections.sh list_collections.sh
-
-# Install for all versions found under script_vars/
-./install_collections.sh
-
-# Install for one or more versions only
-./install_collections.sh 2.6
-./install_collections.sh 2.5 2.6
-
-# Use requirements-git.yml instead of requirements.yml (git sources)
-./install_collections.sh --git 2.6
-```
-
-Each version needs a requirements file at `collections/<version>/requirements.yml` (or `requirements-git.yml` with `--git`).
-
-**List installed collections**
+**Tab completion (Bash):** add this to `~/.bashrc`, or run it in your current shell:
 
 ```bash
-# Show what is installed for AAP 2.6 (only collections in collections/2.6/)
-./list_collections.sh 2.6
+source /path/to/aap-casc-demo/autocomplete.sh
 ```
-
-This runs `ansible-galaxy collection list` scoped to that version directory, so it does not include collections from `~/.ansible/collections` or system paths.
-
-### Bash tab completion
-
-The repository includes `autocomplete.sh`, which offers Tab completion for `<org_name>` and `<environment_name>` on scripts such as `./export.sh` and `./import.sh`. Completion is based on directories under `orgs_vars/`.
-
-Register it in your **interactive Bash shell** (sourcing from inside a running script does not affect your terminal):
-
-**One-time (current shell session):**
-
-```bash
-source /path/to/your-clone/autocomplete.sh
-```
-
-Use the absolute path to this repository (or `source "$(pwd)/autocomplete.sh"` when your shell is already in the repo root).
-
-**Every new terminal (add to `~/.bashrc`):**
-
-```bash
-source /path/to/your-clone/autocomplete.sh
-```
-
-After sourcing, Tab completion applies until you close that shell (or until reboot if you added it to `.bashrc`). This is Bash-only; zsh users need a separate completion setup.
-
-### Avoid Typing Your Vault Password
-By default, these scripts will securely prompt you for your vault password every time they run.
-
-If you are in a trusted environment and want to avoid this, you can tell Ansible where to find your password in a file.
-1.  Create a simple text file containing *only* your vault password (e.g., `.vault_pass.txt`).
-
-2.  **Secure this file:** `chmod 600 .vault_pass.txt`
-
-3.  **Tell Ansible to use it.** You have two common options:
-
-      * **Option 1 (Environment Variable):** Set an environment variable in your `.bashrc` or `.zshrc`:
-
-        ```bash
-         export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass.txt
-        ```
-
-      * **Option 2 (`ansible.cfg`):** Create a file named `ansible.cfg` (or `cp ansible.cfg.example ansible.cfg`) in this repository's root directory with the following content:
-
-        ```ini
-        [defaults]
-        vault_password_file = .vault_pass.txt
-        ```
-
-4.  **Important:** If you create this `ansible.cfg` file, make sure to add it to your `.gitignore` file so you don't accidentally commit it!
-
-### Environment vars.yml
-
-Each environment has a **`vars.yml`** (e.g. `orgs_vars/OCP0Lab/my_prod/vars.yml`) created from `templates/vars.yml`. It controls import behavior and optional export filters. **Export always produces both** `flat_version/` and `filetree_version/`; `flatten_output` only affects which layout **import** expects. All options in the template are:
-
-| Option | Description |
-|--------|--------------|
-| **`organization_filter`** | (Optional.) Limit export to a single AAP organization (e.g. `'Default'`). If unset or empty, all organizations your credentials can access are exported. |
-| **`flatten_output`** | **Import only.** `true`: import uses flat layout and reads every YAML file recursively under `imports` (and `common` when `import_common` is true). `false`: import expects the filetree layout (e.g. `controller_projects.d/`, `gateway_teams.d/`). Export always writes both layouts. |
-| **`secrets_as_variables`** | When `true`, replaces `$encrypted$` in exported data with a variable name so you can define the secret (e.g. in Vault) before re-importing. |
-| **`secrets_as_variables_prefix`** | Prefix for those variable names (default `"vault"`). |
-| **`import_common`** | When `true`, import also reads config from `orgs_vars/<org_name>/common/`. Set to `false` to use only the environment's `imports` folder. |
 
 ## 📚 Documentation
 
-Additional guides and references in the **`docs/`** directory:
+| Guide | What's in it |
+|---|---|
+| [Concepts and Glossary](docs/CONCEPTS.md) | Configuration as code basics, the AAP components, and every term this project uses. |
+| [How-To Guide](docs/HOW_TO.md) | Step-by-step recipes: first export, Git workflow, promoting dev to prod, adding, changing and deleting objects, secrets, CI, and more. |
+| [Folder Layout and Object Reference](docs/FOLDER_LAYOUT.md) | Every folder and YAML key, file format rules, and examples. |
+| [Migrating Between AAP Versions](docs/MIGRATING_BETWEEN_AAP_VERSIONS.md) | Moving a configuration from 2.4 to 2.5+ (or between any versions), and what needs manual work. |
+| [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md) | Collections per AAP version, ansible-core requirements, Execution Environments, and tag lists. |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common errors and how to fix them. |
+| [Collection Variable Reference (controller_configuration → aap_configuration)](docs/MIGRATION_GUIDE_CONTROLLER_TO_AAP.md) | Detailed role and variable mapping between the upstream collections, for writing configuration by hand. |
 
-* **[Migration guide: Controller to AAP](docs/MIGRATION_GUIDE_CONTROLLER_TO_AAP.md)** — Migrating from `infra.controller_configuration` (AAP 2.4 and earlier) to `infra.aap_configuration` / `infra.aap_configuration_extended` (AAP 2.5+).
+## 📦 Supported AAP Versions
+
+| AAP version | Status |
+|---|---|
+| 2.7 | Work in progress |
+| 2.6 | Supported |
+| 2.5 | Supported |
+| 2.4 | Supported (Automation Controller only) |
 
 ## 🔗 Useful Links
 
-External references worth bookmarking:
-
-* **[AAP 2.7 Upgrade — API and Configuration as Code Migration Guide](https://access.redhat.com/articles/7143981)** — Red Hat guide for upgrading to AAP 2.7, including gateway-only API access and CaSC migration considerations.
+* [AAP 2.7 Upgrade: API and Configuration as Code Migration Guide](https://access.redhat.com/articles/7143981): Red Hat's guide to upgrading to AAP 2.7, including gateway-only API access and configuration-as-code considerations.
+* [infra.aap_configuration](https://github.com/redhat-cop/infra.aap_configuration) and [infra.aap_configuration_extended](https://github.com/redhat-cop/aap_configuration_extended): the collections that do the work for AAP 2.5+.
+* [infra.controller_configuration](https://github.com/redhat-cop/infra.controller_configuration): the collection used for AAP 2.4.
 
 ## 🤝 Contributing
 
-We welcome feedback and contributions.
+Feedback and contributions are welcome.
 
-* **Feature requests, bugs, documentation:** Open a [GitHub Issue](https://github.com/lennysh/aap-casc-demo/issues) and choose the appropriate template (Feature request, Bug report, or Documentation).
-* **Questions, usage help, or chat:** Join the [Matrix channel](https://matrix.to/#/#lennysh-aap-casc-demo:matrix.org).
-* **Code or doc changes:** Open a Pull Request. The repo uses a [pull request template](.github/PULL_REQUEST_TEMPLATE.md) to capture description, type of change, and a short checklist.
+* **Feature requests, bugs, documentation:** open a [GitHub Issue](https://github.com/lennysh/aap-casc-demo/issues) and pick the matching template.
+* **Questions and chat:** join the [Matrix channel](https://matrix.to/#/#lennysh-aap-casc-demo:matrix.org).
+* **Code or doc changes:** open a pull request. The [pull request template](.github/PULL_REQUEST_TEMPLATE.md) walks you through the details.
 
 ## 🙏 Thank You
 
 Thanks to everyone who has offered ideas and suggestions that improved this project:
 
-* **[JLaughlin](https://github.com/jd1306)** — for suggesting the `--export-path` / `-o` option on `export.sh`.
-
-## 📦 Supported AAP Versions
-
-This tool is explicitly designed to support multiple AAP versions by loading different tasks and tag lists for each. Supported versions include:
-
-* **AAP 2.7** (still a WIP)
-* **AAP 2.6**
-* **AAP 2.5**
-* **AAP 2.4**
+* **[JLaughlin](https://github.com/jd1306)**, for suggesting the `--export-path` / `-o` option on `export.sh`.
 
 ---
 

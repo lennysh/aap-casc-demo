@@ -1,4 +1,5 @@
 #!/bin/bash
+# Sourced (not run directly) by import.sh and export.sh.
 
 # This function contains all the common logic for argument parsing and validation.
 # It sets the following variables for the calling script to use:
@@ -55,7 +56,7 @@ initialize_and_validate() {
     if [[ ! -f "$env_vars_file" ]]; then
         echo "Error: Environment config file '$env_vars_file' not found."
         echo "This file should contain the CASC_AAP_VERSION for this environment."
-        echo "Try running './start_here.sh $env' again to fix it."
+        echo "Try running './start_here.sh $org $env' again to fix it."
         exit 1
     fi
     # shellcheck source=/dev/null

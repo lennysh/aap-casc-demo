@@ -16,6 +16,8 @@ usage() {
 }
 
 orgs_vars_dir="$parent_dir/orgs_vars"
+# shellcheck source=scripts/vault_functions.sh
+source "$parent_dir/scripts/vault_functions.sh"
 
 # --- Initial Argument Validation ---
 if [[ $# -lt 2 ]]; then
@@ -73,6 +75,8 @@ if [[ ! -f "$vault_file" ]]; then
     exit 1
 fi
 
+ensure_vault_password "$vault_file"
+
 # Patterns that mark a line as sensitive (case-insensitive).
 # Matches key names (password/token), #sensitive markers, and similar wording.
 sensitive_pattern='password|token|sensitive'
@@ -80,10 +84,14 @@ sensitive_pattern='password|token|sensitive'
 echo "=== Vault (redacted): $vault_file ==="
 echo ""
 
-# ansible-vault view decrypts to stdout; filter out sensitive lines.
-# grep exits 1 when nothing matches — treat that as success so an all-redacted
-# vault does not fail the script under set -e.
-ansible-vault view "$vault_file" | grep -viE "$sensitive_pattern" || true
+if ! decrypted=$(ansible-vault view "$vault_file"); then
+    echo "Error: Could not decrypt $vault_file (wrong vault password?)."
+    exit 1
+fi
+
+# Filter out sensitive lines. grep exits 1 when nothing matches; treat that as success so
+# an all-redacted vault does not fail the script under set -e.
+printf '%s\n' "$decrypted" | grep -viE "$sensitive_pattern" || true
 
 echo ""
 echo "=== End of redacted vault (lines matching: $sensitive_pattern) ==="

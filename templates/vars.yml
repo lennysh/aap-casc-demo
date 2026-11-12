@@ -1,23 +1,24 @@
 ---
-# Filter the AAP organization to export.  If not set, all organizations the provided credentials have access to will be exported.
-# Example: organization_filter: 'Default'
-# organization_filter: ''
+# Environment options. See the README ("Environment vars.yml") for details.
 
-# Imports objects as flat as possible (no sub-folders, "like" objects in same file)
-# If set to true, the import process will read every YAML file it finds recursively under the import directory (and common directory if enabled -- see 'import_common').
-# If set to false, the import process will read the filetree layout (e.g. controller_projects.d/gateway_teams.d/etc.).
+# Export only this AAP organization. Leave unset to export everything the AAP user can see.
+# organization_filter: 'Default'
+
+# Import layout:
+#   false (default): read the <type>.d/ folder layout (e.g. controller_projects.d/, aap_teams.d/).
+#   true:            read every YAML file under imports/ (and common/) recursively, wherever it is;
+#                    lists defined in several files are combined.
+# Export always writes both layouts (filetree_version/ and flat_version/).
 flatten_output: false
 
-# Replaces '$encrypted$' with a custom variable name, thus requiring
-# the var to be defined before it can be imported back in
+# Export secrets as placeholder variables (e.g. "{{ vault_controller_credentials_x_password }}")
+# instead of AAP's "$encrypted$" marker. Define the placeholders in a vault before importing.
 secrets_as_variables: true
 
-# New var (mentioned above) prefix
+# Prefix for those placeholder variable names.
 secrets_as_variables_prefix: "vault"
 
-# Each "instance" has its own imports folder, but for objects that you want the same
-# across multiple instances, you can put those in the "orgs_vars/<org_name>/common" folder.
-# If this is "true", the "import" process will grab these as well. To prevent this,
-# change this to "false".
+# Also import orgs_vars/<org>/common/ (configuration shared by every environment of the
+# organization). Set to false to import only this environment's imports/ folder.
 import_common: true
 ...

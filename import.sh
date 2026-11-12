@@ -8,15 +8,15 @@ orgs_vars_dir="$parent_dir/orgs_vars"
 script_vars_dir="$parent_dir/script_vars"
 
 # --- Main usage function ---
-# MUST be defined *before* sourcing common_functions.sh
+# MUST be defined *before* sourcing scripts/common_functions.sh
 usage() {
     local org_context=$1
     local env_context=$2
     echo "Usage: $0 <org> <env> [--playbook|--navigator] [--check|-C] [-a|--all] [-t|--tags <tags>]"
-    echo "  --playbook    Use ansible-playbook (versioned collections). Overrides CASC_USE_PLAYBOOK."
-    echo "  --navigator   Use ansible-navigator with EE (default). Overrides CASC_USE_PLAYBOOK."
+    echo "  --playbook    Use ansible-playbook with versioned collections (default). Overrides CASC_USE_PLAYBOOK."
+    echo "  --navigator   Use ansible-navigator with the EE from script_vars. Overrides CASC_USE_PLAYBOOK."
     echo "  --check, -C   Run in Ansible check mode (dry-run; no changes)."
-    echo "  Default: use CASC_USE_PLAYBOOK env (1/true/yes = playbook); else navigator."
+    echo "  Default: CASC_USE_PLAYBOOK env (unset/1/true/yes = playbook; anything else = navigator)."
     echo ""
 
     if [[ -z "$org_context" ]] || [[ -z "$env_context" ]]; then
@@ -66,11 +66,13 @@ usage() {
 }
 
 # Source common functions *after* usage() is defined
-# shellcheck source=common_functions.sh
-source "$parent_dir/common_functions.sh"
+# shellcheck source=scripts/common_functions.sh
+source "$parent_dir/scripts/common_functions.sh"
+# shellcheck source=scripts/vault_functions.sh
+source "$parent_dir/scripts/vault_functions.sh"
 
 # --- Parse --playbook / --navigator / --check (must be done before initialize_and_validate) ---
-# Default from env: CASC_USE_PLAYBOOK=1 or true or yes → playbook; else navigator.
+# Default from env: CASC_USE_PLAYBOOK unset, 1, true or yes → playbook; anything else → navigator.
 case "${CASC_USE_PLAYBOOK:-1}" in
     1|true|yes|TRUE|YES) USE_ANSIBLE_PLAYBOOK=true ;;
     *)                   USE_ANSIBLE_PLAYBOOK=false ;;
@@ -91,8 +93,11 @@ done
 
 # --- Initialize and Validate ---
 # Pass "import" to build the correct yq keys, and pass script arguments (without --playbook).
-# common_functions.sh will parse $env and load the $CASC_AAP_VERSION from it.
+# scripts/common_functions.sh will parse $env and load the $CASC_AAP_VERSION from it.
 initialize_and_validate "import" "${filtered_args[@]}"
+
+# --- Vault password (prompt if no vault password file is configured/present) ---
+ensure_vault_password "$orgs_vars_dir/$org/$env/vault.yml" "$orgs_vars_dir/$org/common/vault.yml"
 
 # --- Build and Execute Command ---
 cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; }
@@ -100,7 +105,7 @@ cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; 
 playbook_args=(
     "import_export.yml"
     "-e" "import_export_mode=import"
-    "-e" "casc_aap_version=$CASC_AAP_VERSION" # Note: $CASC_AAP_VERSION is set in common_functions.sh
+    "-e" "casc_aap_version=$CASC_AAP_VERSION" # Note: $CASC_AAP_VERSION is set in scripts/common_functions.sh
     "-e" "{orgs: $org, dir_orgs_vars: orgs_vars, env: $env}"
     "-e" "{env_dir: $orgs_vars_dir/$org/$env}"
     "-e" "{common_dir: $orgs_vars_dir/$org/common}"
@@ -130,7 +135,8 @@ if [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]]; then
     # Use only this path for this run (override; no export so caller's env is untouched).
     ANSIBLE_COLLECTIONS_PATH="$collections_dir" ansible-playbook "${playbook_args[@]}"
 else
-    ansible-navigator run "${playbook_args[@]}" \
+    mapfile -t navigator_vault_args < <(vault_navigator_args)
+    ansible-navigator run "${playbook_args[@]}" "${navigator_vault_args[@]}" \
         --mode stdout \
         --pae false \
         --pull-policy missing \

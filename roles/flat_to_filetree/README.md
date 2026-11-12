@@ -1,7 +1,7 @@
 flat_to_filetree
 ================
 
-Converts a flat directory of Ansible variable files (e.g., from an AAP export) into a structured file tree.
+Converts a flat directory of Ansible variable files (e.g., from an AAP export) into a structured file tree. `export.sh` runs it automatically to produce `filetree_version/`; you can also run it on your own files with `flat_to_filetree.yml`.
 
 This role is designed to take a large set of `*.yml` files containing lists of objects (like `controller_credentials`, `controller_projects`, etc.) and split each object into its own individual YAML file, sorted into directories based on rules you provide.
 
@@ -10,7 +10,7 @@ It is particularly useful for converting "flat" Configuration as Code exports in
 Requirements
 ------------
 
-* Ansible 2.15.0 or later.
+* ansible-core 2.16 or later.
 * The `lookup('pipe', 'cat ...')` feature must be available on the Ansible controller, as this role uses it to read files without triggering Jinja2 templating.
 * Source YAML files must be parsable. The role automatically strips `!unsafe` tags to handle common export formats.
 
@@ -43,6 +43,13 @@ flat_to_filetree_copy_only_map:
     filename: gateway_settings.yml
     var_name: gateway_settings
 ```
+
+* `flat_to_filetree_var_aliases`
+    * **Optional:** Renames variables to the standard (AAP 2.5+) names before splitting, with optional per-item key renames. The defaults map the AAP 2.4 names (`controller_organizations`, `controller_teams`, `controller_user_accounts`, `controller_applications`) and `gateway_organizations` to their `aap_*` equivalents, so every AAP version exports the same layout.
+
+* `flat_to_filetree_merge_keys`
+    * **Optional:** After aliasing, merges list entries that share the given identity fields (first entry wins; later ones only add missing fields), e.g. `aap_teams: [name, organization]`. Removes duplicates when several exporters write the same object.
+    * Uses the `rename_keys` / `merge_by_key` filters from the repo's `filter_plugins/casc_lists.py`, so run this role from a playbook in the repo root (as `import_export.yml` and `flat_to_filetree.yml` are).
 
 * `flat_to_filetree_var_to_folder_map`
     * **Required:** A dictionary mapping the top-level YAML variable (e.g., `controller_credentials`) to the name of the root folder you want to create for it.
@@ -134,7 +141,7 @@ This is an example of how this role is called.
 License
 -------
 
-GPL-3.0-or-later
+MIT
 
 Author Information
 ------------------

@@ -14,6 +14,7 @@ filetree_to_flat_output_path: ""
 # <variable_name_to_create>: <directory_to_scan>
 #
 filetree_to_flat_map:
+  # Standard (AAP 2.5+) layout; keys are the variable names dispatch reads.
   aap_applications: aap_applications.d
   aap_organizations: aap_organizations.d
   aap_teams: aap_teams.d
@@ -25,16 +26,23 @@ filetree_to_flat_map:
   controller_groups: controller_groups.d
   controller_hosts: controller_hosts.d
   controller_instance_groups: controller_instance_groups.d
+  controller_instances: controller_instances.d
   controller_inventories: controller_inventories.d
   controller_inventory_sources: controller_inventory_sources.d
-  controller_job_templates: controller_job_templates.d
   controller_labels: controller_labels.d
-  controller_notification_templates: controller_notification_templates.d
+  controller_notifications: controller_notification_templates.d
   controller_projects: controller_projects.d
   controller_roles: controller_roles.d
-  controller_settings: controller_settings.d
   controller_schedules: controller_schedules.d
-  controller_workflow_job_templates: controller_workflow_job_templates.d
+  controller_settings: controller_settings.d
+  controller_templates: controller_job_templates.d
+  controller_workflows: controller_workflow_job_templates.d
+  eda_credential_types: eda_credential_types.d
+  eda_credentials: eda_credentials.d
+  eda_decision_environments: eda_decision_environments.d
+  eda_event_streams: eda_event_streams.d
+  eda_projects: eda_projects.d
+  eda_rulebook_activations: eda_rulebook_activations.d
   gateway_authenticator_maps: gateway_authenticator_maps.d
   gateway_authenticators: gateway_authenticators.d
   gateway_http_ports: gateway_http_ports.d
@@ -47,3 +55,10 @@ filetree_to_flat_map:
   gateway_service_nodes: gateway_service_nodes.d
   gateway_services: gateway_services.d
   gateway_settings: gateway_settings.d
+  hub_collection_remotes: hub_collection_remotes.d
+  hub_collection_repositories: hub_collection_repositories.d
+  hub_collections: hub_collections.d
+  hub_ee_images: hub_ee_images.d
+  hub_ee_registries: hub_ee_registries.d
+  hub_ee_repositories: hub_ee_repositories.d
+  hub_namespaces: hub_namespaces.d
