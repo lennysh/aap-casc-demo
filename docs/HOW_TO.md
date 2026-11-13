@@ -1,6 +1,6 @@
 # How-To Guide
 
-Step-by-step recipes for common tasks. The examples use an organization folder called `MyCompany` with environments `dev` and `prod`. Replace them with your own names.
+Step-by-step recipes for common tasks. The examples use a workspace called `MyCompany` with environments `dev` and `prod`. Replace them with your own names.
 
 **Getting started**
 
@@ -42,7 +42,7 @@ Step-by-step recipes for common tasks. The examples use an organization folder c
     ./start_here.sh MyCompany prod
     ```
 
-    Pick the AAP version, answer **n** to flattened mode, choose a vault password, and fill in the vault that opens: `vault_aap_hostname`, plus `vault_aap_username` / `vault_aap_password` (or `vault_aap_token`). Set `vault_aap_validate_certs: false` if AAP uses a self-signed certificate.
+    Pick the AAP version and the *Filetree* layout, enter the AAP URL and credentials (answer **n** to certificate validation if AAP uses a self-signed certificate), and choose a vault password. The wizard tests the connection before saving anything.
 
 2. Export:
 
@@ -99,7 +99,9 @@ A typical change workflow: create a branch, edit files, run `./import.sh ... --c
 ./start_here.sh MyCompany test
 ```
 
-The new environment shares `orgs_vars/MyCompany/common/` with the existing ones. When asked, use the **same vault password** as the organization's existing common vault, so one password decrypts everything for that organization.
+The new environment shares `orgs_vars/MyCompany/common/` with the existing ones. When asked, use the **same vault password** as the workspace's existing common vault, so one password decrypts everything in that workspace.
+
+To check an existing environment, run `./start_here.sh MyCompany test` again. It prints the AAP version, layout, vault status and last export, and adds anything that's missing.
 
 ## Add a new object
 
@@ -268,6 +270,14 @@ organization_filter: 'Network Team'
 
 Then export as usual. Remove or empty the option to export everything again.
 
+If each AAP organization is managed separately (for example by a different team), a common pattern is one workspace per AAP organization, named after it, with `organization_filter` set in each of its environments:
+
+```bash
+./start_here.sh NetworkTeam prod     # then set organization_filter: 'Network Team' in its vars.yml
+```
+
+Workspaces and AAP organizations are otherwise unrelated. See [Workspace and environment](CONCEPTS.md#workspace-and-environment).
+
 ## Run without prompts (CI/CD)
 
 The scripts can run unattended:
@@ -277,6 +287,17 @@ export CASC_VAULT_PASSWORD="$VAULT_PASSWORD_FROM_YOUR_CI_SECRET_STORE"
 export CASC_USE_PLAYBOOK=true        # or false to use ansible-navigator
 ./import.sh MyCompany prod -a
 ```
+
+Environments can be created unattended too (for example in a bootstrap pipeline):
+
+```bash
+export CASC_VAULT_PASSWORD=...          # encrypts the new vaults
+export AAP_PASSWORD=...                 # or AAP_TOKEN=... instead of --username
+./start_here.sh MyCompany prod --version 2.6 --filetree \
+  --hostname https://aap.example.com --username admin --yes
+```
+
+`--yes` never asks questions and fails if something required is missing. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
 
 * `CASC_VAULT_PASSWORD` supplies the vault password without a prompt. Alternatively, provide a password file through `ANSIBLE_VAULT_PASSWORD_FILE`.
 * Without a terminal and without a password source, the scripts stop with an explanation instead of hanging on a prompt.

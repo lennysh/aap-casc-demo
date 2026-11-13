@@ -7,6 +7,7 @@ ANSIBLE_VERBOSITY=3 ./import.sh MyCompany prod -t controller_projects
 ```
 
 * [Setup and scripts](#setup-and-scripts)
+* [Setup wizard connection test](#setup-wizard-connection-test)
 * [Vault and passwords](#vault-and-passwords)
 * [Collections and ansible-core](#collections-and-ansible-core)
 * [Connecting to AAP](#connecting-to-aap)
@@ -24,17 +25,42 @@ Make the scripts executable: `chmod +x *.sh scripts/*.sh`.
 **`declare: -n: invalid option` or `declare: -A: invalid option`**
 Your Bash is older than 4.3. macOS ships Bash 3.2, so install a newer one (for example `brew install bash`) and run the scripts with it.
 
-**`Error: Organization '<org>' not found` / `Environment '<env>' not found`**
-The folder doesn't exist under `orgs_vars/`. The message lists the ones that do. Create a new environment with `./start_here.sh <org> <env>`.
+**`Error: Workspace '<workspace>' not found` / `Environment '<env>' not found`**
+The folder doesn't exist under `orgs_vars/`. The message lists the ones that do. Create a new environment with `./start_here.sh <workspace> <env>`.
 
 **`Error: Environment config file '.../vars.env' not found`**
-The environment is incomplete. Run `./start_here.sh <org> <env>` again; it repairs missing pieces without overwriting existing ones.
+The environment is incomplete. Run `./start_here.sh <workspace> <env>` again; it repairs missing pieces without overwriting existing ones.
 
 **`Error: Invalid tag(s) provided`**
-Tags differ between AAP versions (for example `projects` on 2.4 vs. `controller_projects` on 2.5+). Run `./export.sh <org> <env>` or `./import.sh <org> <env>` without options to list the valid tags. See [Tags](VERSIONS_AND_COLLECTIONS.md#tags).
+Tags differ between AAP versions (for example `projects` on 2.4 vs. `controller_projects` on 2.5+). Run `./export.sh <workspace> <env>` or `./import.sh <workspace> <env>` without options to list the valid tags. See [Tags](VERSIONS_AND_COLLECTIONS.md#tags).
 
 **`Error: Missing option [-a|--all] or [-t|--tags]`**
 Tell the script what to process: `-a` for everything, or `-t "<tags>"`.
+
+**`Invalid workspace name` / `Invalid environment name` / `'common' is reserved`**
+Names may contain letters, digits, `.`, `_` and `-`, and must start with a letter or digit. `common` can't be an environment name because it's the workspace's shared folder.
+
+**I picked the wrong AAP version or layout in the wizard**
+Change `CASC_AAP_VERSION` in `orgs_vars/<workspace>/<env>/vars.env`, or `flatten_output` in `vars.yml`. Or delete the file and run `./start_here.sh <workspace> <env>` again to be asked again. If you change the version, re-run the wizard so it creates that version's folders.
+
+## Setup wizard connection test
+
+The wizard tests the connection before saving your credentials. If the test fails, you can re-enter the details, save them anyway, or quit (nothing is saved). With `--yes`, a failed test stops the wizard; add `--skip-test` to save without testing.
+
+**`Can't reach https://...: Could not resolve host`** / **`Connection refused`** / **`timed out`**
+Check the URL, DNS, VPN and proxy settings. The test uses `curl`, so `https_proxy` / `no_proxy` apply.
+
+**`TLS problem talking to ...`**
+The certificate isn't trusted (often self-signed). The wizard offers to turn off certificate validation; or install the CA certificate on your machine and keep validation on.
+
+**`... answered, but doesn't look like AAP`**
+The URL reached a web server without an AAP API. Use the base URL of AAP (for example `https://aap.example.com`), not a page or sub-path.
+
+**`AAP rejected the credentials (HTTP 401)`**
+Wrong username or password (or token). Accounts that only exist in an external authenticator may need a local account or a token instead.
+
+**`the server reports AAP X` / `that URL answers like AAP 2.4`**
+The version you chose doesn't match the server. Either choose the right version, or, on AAP 2.5+, use the **platform gateway** URL instead of the controller's.
 
 ## Vault and passwords
 
@@ -48,13 +74,13 @@ That's the default when no password file is configured. To avoid it, see [Vault 
 You're running without a terminal (CI, cron, a pipe). Set `CASC_VAULT_PASSWORD`, or provide a password file. See [Run without prompts](HOW_TO.md#run-without-prompts-cicd).
 
 **`Decryption failed (no vault secrets were found that could decrypt)`**
-The password is wrong for that vault file. Each organization's environment and common vaults should share one password. If they don't, re-key one with `ansible-vault rekey <file>`.
+The password is wrong for that vault file. All vaults in a workspace (environments and `common`) should share one password. If they don't, re-key one with `ansible-vault rekey <file>`.
 
 **`Attempting to decrypt but no vault secrets found`** or **`The vault password file ... was not found`**
 These appear when running `ansible-playbook` or `ansible-vault` directly, outside the scripts. Pass `--ask-vault-pass` or `--vault-password-file <file>`, or use the scripts, which handle it for you.
 
 **`'vault_...' is undefined`**
-A file references a secret placeholder that no vault defines. Add it to the environment vault (`./vault-edit.sh <org> <env>`) or the common vault (`./vault-edit.sh <org> common`). See [Handle secrets](HOW_TO.md#handle-secrets).
+A file references a secret placeholder that no vault defines. Add it to the environment vault (`./vault-edit.sh <workspace> <env>`) or the common vault (`./vault-edit.sh <workspace> common`). See [Handle secrets](HOW_TO.md#handle-secrets).
 
 ## Collections and ansible-core
 
@@ -82,7 +108,7 @@ The collections for that AAP version are missing or incomplete. Re-run `./instal
 AAP uses a certificate your machine doesn't trust (for example, self-signed). Set `vault_aap_validate_certs: false` in the environment vault, or install the CA certificate on your machine.
 
 **`Name or service not known` / `Connection refused` / timeouts while creating the token**
-Check `vault_aap_hostname` (`./vault-view.sh <org> <env>` shows it). On AAP 2.5+, it must be the **platform gateway** URL, not the controller's.
+Check `vault_aap_hostname` (`./vault-view.sh <workspace> <env>` shows it). On AAP 2.5+, it must be the **platform gateway** URL, not the controller's.
 
 **`401 Unauthorized` / `Invalid username/password`**
 Check `vault_aap_username` / `vault_aap_password`, or `vault_aap_token`. Users from an external authenticator (LDAP, SAML) may not be able to create tokens. Try a local admin account or a pre-created token.
@@ -116,7 +142,7 @@ Secrets always show as changed because AAP can't compare them. Some defaults dif
 ## Export problems
 
 **Export times out on a large instance**
-Raise the API timeout: `CONTROLLER_REQUEST_TIMEOUT=300 ./export.sh <org> <env> -a`. Or export in parts with `-t`, or use `organization_filter`.
+Raise the API timeout: `CONTROLLER_REQUEST_TIMEOUT=300 ./export.sh <workspace> <env> -a`. Or export in parts with `-t`, or use `organization_filter`.
 
 **Secrets show as `{{ vault_... }}` instead of values**
 That's expected: AAP never returns secrets. See [Handle secrets](HOW_TO.md#handle-secrets).

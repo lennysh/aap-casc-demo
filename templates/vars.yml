@@ -18,7 +18,7 @@ secrets_as_variables: true
 # Prefix for those placeholder variable names.
 secrets_as_variables_prefix: "vault"
 
-# Also import orgs_vars/<org>/common/ (configuration shared by every environment of the
-# organization). Set to false to import only this environment's imports/ folder.
+# Also import orgs_vars/<workspace>/common/ (configuration shared by every environment of the
+# workspace). Set to false to import only this environment's imports/ folder.
 import_common: true
 ...

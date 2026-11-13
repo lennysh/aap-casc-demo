@@ -7,9 +7,9 @@ parent_dir=$(dirname "$(readlink -f "$0")")
 
 # --- Function to display usage ---
 usage() {
-    echo "Usage: $0 <org> <env>"
+    echo "Usage: $0 <workspace> <env>"
     echo ""
-    echo "Decrypts and prints the vault for <org>/<env>, omitting lines that"
+    echo "Decrypts and prints the vault for <workspace>/<env>, omitting lines that"
     echo "contain (case-insensitive): password, token, or sensitive."
     echo "Mark additional secret lines with #sensitive so they are filtered too."
     exit 1
@@ -21,7 +21,7 @@ source "$parent_dir/scripts/vault_functions.sh"
 
 # --- Initial Argument Validation ---
 if [[ $# -lt 2 ]]; then
-    echo "Error: Missing organization or environment argument."
+    echo "Error: Missing workspace or environment argument."
     echo ""
     if [[ $# -eq 0 ]]; then
         usage
@@ -34,7 +34,7 @@ if [[ $# -lt 2 ]]; then
         else
             if [[ -d "$orgs_vars_dir" ]]; then
                 available_orgs=$(find "$orgs_vars_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
-                echo "Available organizations: {$available_orgs}"
+                echo "Available workspaces: {$available_orgs}"
             fi
         fi
     fi
@@ -45,20 +45,20 @@ org=$1
 env=$2
 org_base_dir="$orgs_vars_dir/$org"
 
-# --- Validate Organization ---
+# --- Validate Workspace ---
 if [[ ! -d "$org_base_dir" ]]; then
-    echo "Error: Organization '$org' not found or is invalid."
+    echo "Error: Workspace '$org' not found under orgs_vars/."
     echo ""
     if [[ -d "$orgs_vars_dir" ]]; then
         available_orgs=$(find "$orgs_vars_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
-        echo "Available organizations: {$available_orgs}"
+        echo "Available workspaces: {$available_orgs}"
     fi
     exit 1
 fi
 
 # --- Validate Environment ---
 if [[ "$env" != "common" ]] && [[ ! -d "$org_base_dir/$env" ]]; then
-    echo "Error: Environment '$env' not found or is invalid in organization '$org'."
+    echo "Error: Environment '$env' not found in workspace '$org'."
     echo ""
     available_envs=$(find "$org_base_dir" -mindepth 1 -maxdepth 1 -type d -not -name "common" -printf "%f|" | sed 's/|$//')
     echo "Available environments in '$org': {$available_envs}"

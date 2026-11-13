@@ -40,7 +40,7 @@ Variables
 | `vault_aap_hostname` | AAP URL (gateway URL on 2.5+). Falls back to the `AAP_HOST` environment variable. |
 | `vault_aap_username` + `vault_aap_password`, or `vault_aap_token` | Credentials (fallback: `AAP_USERNAME` / `AAP_PASSWORD`). |
 | `export_path` | Export only: output directory. |
-| `orgs`, `env`, `dir_orgs_vars`, `env_dir`, `common_dir` | Import only: organization and environment names, the `orgs_vars` path, the environment folder, and the organization's `common` folder. |
+| `orgs`, `env`, `dir_orgs_vars`, `env_dir`, `common_dir` | Import only: workspace and environment names (`orgs` holds the workspace name), the `orgs_vars` path, the environment folder, and the workspace's `common` folder. |
 
 **Optional**
 

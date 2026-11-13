@@ -1,6 +1,6 @@
 ---
 # Environment vault: how to reach this AAP instance, plus secrets used only by this environment.
-# Edit with: ./vault-edit.sh <org> <env>
+# Edit with: ./vault-edit.sh <workspace> <env>
 
 # AAP URL or hostname. On AAP 2.5+ this is the platform gateway.
 vault_aap_hostname: "aap.mycompany.com"

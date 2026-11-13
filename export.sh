@@ -12,7 +12,7 @@ script_vars_dir="$parent_dir/script_vars"
 usage() {
     local org_context=$1
     local env_context=$2
-    echo "Usage: $0 <org> <env> [--playbook|--navigator] [--check|-C] [-o|--export-path <dir>] [-a|--all] [-t|--tags <tags>]"
+    echo "Usage: $0 <workspace> <env> [--playbook|--navigator] [--check|-C] [-o|--export-path <dir>] [-a|--all] [-t|--tags <tags>]"
     echo "  --playbook    Use ansible-playbook with versioned collections (default). Overrides CASC_USE_PLAYBOOK."
     echo "  --navigator   Use ansible-navigator with the EE from script_vars. Overrides CASC_USE_PLAYBOOK."
     echo "  --check, -C   Run in Ansible check mode (dry-run; no changes)."
@@ -21,7 +21,7 @@ usage() {
     echo ""
 
     if [[ -z "$org_context" ]] || [[ -z "$env_context" ]]; then
-        # No org or env provided, just exit with simple usage
+        # No workspace or env provided, just exit with simple usage
         exit 1
     fi
 

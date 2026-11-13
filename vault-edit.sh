@@ -8,7 +8,7 @@ parent_dir=$(dirname "$(readlink -f "$0")")
 # --- Function to display usage ---
 # Moved to the top and made generic for better script structure.
 usage() {
-    echo "Usage: $0 <org> <env>"
+    echo "Usage: $0 <workspace> <env|common>"
     exit 1
 }
 
@@ -19,13 +19,13 @@ source "$parent_dir/scripts/vault_functions.sh"
 # --- Initial Argument Validation ---
 # Ensure the two mandatory arguments are provided.
 if [[ $# -lt 2 ]]; then
-    echo "Error: Missing organization or environment argument."
+    echo "Error: Missing workspace or environment argument."
     echo ""
     if [[ $# -eq 0 ]]; then
         # No arguments provided, show usage
         usage
     elif [[ $# -eq 1 ]]; then
-        # Only org provided, list available environments for that org
+        # Only workspace provided, list available environments for that workspace
         org=$1
         org_base_dir="$orgs_vars_dir/$org"
         if [[ -d "$org_base_dir" ]]; then
@@ -34,7 +34,7 @@ if [[ $# -lt 2 ]]; then
         else
             if [[ -d "$orgs_vars_dir" ]]; then
                 available_orgs=$(find "$orgs_vars_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
-                echo "Available organizations: {$available_orgs}"
+                echo "Available workspaces: {$available_orgs}"
             fi
         fi
     fi
@@ -45,20 +45,20 @@ org=$1
 env=$2
 org_base_dir="$orgs_vars_dir/$org"
 
-# --- Validate Organization ---
+# --- Validate Workspace ---
 if [[ ! -d "$org_base_dir" ]]; then
-    echo "Error: Organization '$org' not found or is invalid."
+    echo "Error: Workspace '$org' not found under orgs_vars/."
     echo ""
     if [[ -d "$orgs_vars_dir" ]]; then
         available_orgs=$(find "$orgs_vars_dir" -mindepth 1 -maxdepth 1 -type d -printf "%f|" | sed 's/|$//')
-        echo "Available organizations: {$available_orgs}"
+        echo "Available workspaces: {$available_orgs}"
     fi
     exit 1
 fi
 
 # --- Validate Environment (only for non-common; common may not exist yet) ---
 if [[ "$env" != "common" ]] && [[ ! -d "$org_base_dir/$env" ]]; then
-    echo "Error: Environment '$env' not found or is invalid in organization '$org'."
+    echo "Error: Environment '$env' not found in workspace '$org'."
     echo ""
     available_envs=$(find "$org_base_dir" -mindepth 1 -maxdepth 1 -type d -not -name "common" -printf "%f|" | sed 's/|$//')
     echo "Available environments in '$org': {$available_envs}"

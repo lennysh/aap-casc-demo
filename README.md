@@ -87,13 +87,19 @@ This walk-through exports an existing AAP instance and imports it again. It's th
 
     Skip this step if you'll use `--navigator` with an Execution Environment.
 
-3. **Create an organization and environment.** An *organization* here is just a folder that groups related environments (for example `MyCompany`). An *environment* is one AAP instance (for example `prod`). See [Concepts](docs/CONCEPTS.md#organization-and-environment).
+3. **Create a workspace and environment.** A *workspace* is just a folder name that groups environments sharing configuration, typically a company, team or lab (for example `MyCompany` with environments `dev`, `qa` and `prod`). It doesn't have to match an AAP organization. An *environment* is one AAP instance (for example `prod`). See [Concepts](docs/CONCEPTS.md#workspace-and-environment).
 
     ```bash
-    ./start_here.sh MyCompany prod
+    ./start_here.sh MyCompany prod      # or just ./start_here.sh to pick or create them from a menu
     ```
 
-    The script asks for the AAP version and whether to use flattened mode (answer **n** unless you know you want it). It then creates the folders and asks you to choose a vault password. Finally it opens the new encrypted `vault.yml` in your editor: set `vault_aap_hostname` and either `vault_aap_username` / `vault_aap_password` or `vault_aap_token`.
+    The setup wizard asks:
+    * **the AAP version** of that instance;
+    * **the import layout:** choose *Filetree* unless you have a reason not to (see [Filetree or flat?](docs/CONCEPTS.md#filetree-and-flat-layouts));
+    * **how to reach AAP:** URL, certificate validation, and a username and password (or an existing token). It then **tests the connection** and warns you if the server's version doesn't match what you chose;
+    * **a vault password**, which encrypts the connection details and other secrets in `vault.yml`.
+
+    It also checks your tools, offers to install missing collections, and finishes with the exact commands to run next. Run it again any time to see an environment's status or repair missing pieces.
 
 4. **Export everything:**
 
@@ -127,14 +133,14 @@ This walk-through exports an existing AAP instance and imports it again. It's th
 ### Exporting
 
 ```bash
-./export.sh <org> <env> (-a | -t <tags>) [--playbook | --navigator] [--check] [-o <dir>]
+./export.sh <workspace> <env> (-a | -t <tags>) [--playbook | --navigator] [--check] [-o <dir>]
 ```
 
 | Option | Meaning |
 |---|---|
 | `-a`, `--all` | Export everything supported for the environment's AAP version. |
 | `-t`, `--tags "<t1>,<t2>"` | Export only these object types (see [tags](#choosing-what-to-export-or-import-tags)). |
-| `-o`, `--export-path <dir>` | Write the export here instead of `orgs_vars/<org>/<env>/exports/<org>_<env>_export_<timestamp>/`. |
+| `-o`, `--export-path <dir>` | Write the export here instead of `orgs_vars/<workspace>/<env>/exports/<workspace>_<env>_export_<timestamp>/`. |
 | `--playbook` / `--navigator` | Run with `ansible-playbook` (default) or `ansible-navigator`. |
 | `-C`, `--check` | Ansible check mode. |
 
@@ -148,19 +154,19 @@ To export only one AAP organization, set `organization_filter` in the environmen
 ### Importing
 
 ```bash
-./import.sh <org> <env> (-a | -t <tags>) [--playbook | --navigator] [--check]
+./import.sh <workspace> <env> (-a | -t <tags>) [--playbook | --navigator] [--check]
 ```
 
 Import reads YAML from two places and applies it to the environment's AAP instance:
 
-* `orgs_vars/<org>/common/`: configuration shared by every environment in the organization (skip it with `import_common: false`).
-* `orgs_vars/<org>/<env>/imports/`: configuration for this environment only.
+* `orgs_vars/<workspace>/common/`: configuration shared by every environment in the workspace (skip it with `import_common: false`).
+* `orgs_vars/<workspace>/<env>/imports/`: configuration for this environment only.
 
 Objects are matched by name (and organization, where relevant). Existing objects are updated and missing ones are created. Objects that exist in AAP but not in your files are left alone. To remove an object, set `state: absent` on it (see [How-To](docs/HOW_TO.md#delete-an-object)).
 
 ### Choosing what to export or import (tags)
 
-Each object type has a tag (for example `controller_projects`, `gateway_teams`, `eda_projects`). Run a script with just the org and env to see every valid tag for that environment's AAP version:
+Each object type has a tag (for example `controller_projects`, `gateway_teams`, `eda_projects`). Run a script with just the workspace and env to see every valid tag for that environment's AAP version:
 
 ```bash
 ./export.sh MyCompany prod
@@ -180,7 +186,7 @@ Combine tags with commas: `-t "controller_projects,controller_job_templates"`. O
 
 ```text
 orgs_vars/
-└── MyCompany/                         # "organization": a group of related environments
+└── MyCompany/                         # workspace: a group of related environments (any name)
     ├── common/                        # shared by every environment below
     │   ├── vault.yml                  # encrypted secrets shared by all environments
     │   ├── controller_credential_types.d/
@@ -211,16 +217,16 @@ Each environment has a `vars.yml` (created from `templates/vars.yml`):
 | `flatten_output` | `false` | Import layout. `false`: read the `<type>.d/` folder layout. `true`: read every YAML file under `imports/` (and `common/`) recursively, wherever it is; lists defined in several files are combined. Export always writes both layouts. |
 | `secrets_as_variables` | `true` | Export secrets as `{{ <prefix>_... }}` placeholders instead of AAP's `$encrypted$` marker. |
 | `secrets_as_variables_prefix` | `"vault"` | Prefix for those placeholder variable names. |
-| `import_common` | `true` | Also import `orgs_vars/<org>/common/`. Set to `false` to import only the environment's `imports/` folder. |
+| `import_common` | `true` | Also import `orgs_vars/<workspace>/common/`. Set to `false` to import only the environment's `imports/` folder. |
 
-The environment's `vars.env` holds `CASC_AAP_VERSION` (the AAP version) and `FLATTEN_OUTPUT`. Both are written by `start_here.sh`.
+The environment's `vars.env` holds `CASC_AAP_VERSION` (the AAP version), written by `start_here.sh`. It also records `FLATTEN_OUTPUT`, the layout chosen at setup; after setup, `flatten_output` in `vars.yml` is what counts.
 
 ### Vault files
 
 | File | Holds |
 |---|---|
-| `orgs_vars/<org>/<env>/vault.yml` | How to reach this AAP instance, plus environment-specific secrets. |
-| `orgs_vars/<org>/common/vault.yml` | Secrets shared by every environment in the organization (loaded on import). |
+| `orgs_vars/<workspace>/<env>/vault.yml` | How to reach this AAP instance, plus environment-specific secrets. |
+| `orgs_vars/<workspace>/common/vault.yml` | Secrets shared by every environment in the workspace (loaded on import). |
 
 Connection variables in the environment vault:
 
@@ -231,7 +237,7 @@ Connection variables in the environment vault:
 | `vault_aap_username` / `vault_aap_password` | Credentials. A temporary token is created for the run and deleted afterwards. |
 | `vault_aap_token` | Alternatively, an existing OAuth token (comment out username/password). |
 
-Use `./vault-edit.sh <org> <env>` to edit a vault (use `common` as the env for the shared vault) and `./vault-view.sh <org> <env>` to print it with password and token lines hidden.
+Use `./vault-edit.sh <workspace> <env>` to edit a vault (use `common` as the env for the shared vault) and `./vault-view.sh <workspace> <env>` to print it with password and token lines hidden.
 
 ### Vault password: prompt or password file
 
@@ -281,13 +287,13 @@ Everything you run lives in the repository root. Internal helpers live in `scrip
 
 | Script | Purpose |
 |---|---|
-| `start_here.sh <org> <env>` | Create (or repair) an environment: folders, `vars.env`, `vars.yml`, vaults. |
+| `start_here.sh [<workspace> <env>]` | Setup wizard: create, repair or check an environment (version, layout, folders, connection test, vaults). `--help` lists options for unattended use. |
 | `export.sh` / `import.sh` | Export from / import to AAP. |
-| `vault-edit.sh <org> <env\|common>` | Create or edit a vault. |
-| `vault-view.sh <org> <env>` | Show a vault with secret lines hidden. |
+| `vault-edit.sh <workspace> <env\|common>` | Create or edit a vault. |
+| `vault-view.sh <workspace> <env>` | Show a vault with secret lines hidden. |
 | `install_collections.sh [--git] [version ...]` | Install each AAP version's collections into `collections/<version>/`. |
 | `list_collections.sh <version>` | List the collections installed for a version. |
-| `autocomplete.sh` | Tab completion for org and env names (`source` it). |
+| `autocomplete.sh` | Tab completion for workspace and env names (`source` it). |
 
 Utility playbooks for advanced use (`flat_to_filetree.yml`, `filetree_to_flat.yml`, `convert_roles.yml`) are covered in the [How-To guide](docs/HOW_TO.md).
 
@@ -313,7 +319,7 @@ source /path/to/aap-casc-demo/autocomplete.sh
 
 | AAP version | Status |
 |---|---|
-| 2.7 | Work in progress |
+| 2.7 | Supported |
 | 2.6 | Supported |
 | 2.5 | Supported |
 | 2.4 | Supported (Automation Controller only) |

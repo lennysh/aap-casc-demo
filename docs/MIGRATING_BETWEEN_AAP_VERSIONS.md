@@ -31,7 +31,7 @@ Every other object type (credentials, projects, inventories, hosts, job template
 
 ## Migrate AAP 2.4 to 2.5+ step by step
 
-1. **Create an environment for each instance** (same organization folder, so they share `common/`):
+1. **Create an environment for each instance** (same workspace, so they share `common/`):
 
     ```bash
     ./start_here.sh MyCompany aap24     # choose 2.4

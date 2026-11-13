@@ -13,7 +13,7 @@ _repo_scripts_autocomplete() {
     # If the orgs_vars directory doesn't exist yet, there is nothing to complete
     [[ ! -d "$orgs_vars_dir" ]] && return 0
 
-    # Case 1: Completing the 1st argument (ORG)
+    # Case 1: Completing the 1st argument (workspace)
     if [ "$cword" -eq 1 ]; then
         # Dynamically list only the top-level directories inside orgs_vars
         local orgs
@@ -24,10 +24,10 @@ _repo_scripts_autocomplete() {
 
     # Case 2: Completing the 2nd argument (ENV)
     if [ "$cword" -eq 2 ]; then
-        # The previous argument typed by the user is the selected ORG
+        # The previous argument typed by the user is the selected workspace
         local org_dir="$orgs_vars_dir/$prev"
 
-        # If that ORG folder actually exists, dynamically list its subfolders (envs)
+        # If that workspace folder actually exists, dynamically list its subfolders (envs)
         if [ -d "$org_dir" ]; then
             local envs
             envs=$(find "$org_dir" -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)

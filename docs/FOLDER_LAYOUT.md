@@ -3,7 +3,7 @@
 This page is the reference for where configuration lives and what goes in each file.
 
 * [Repository layout](#repository-layout)
-* [Organization and environment folders](#organization-and-environment-folders)
+* [Workspace and environment folders](#workspace-and-environment-folders)
 * [How import finds your files](#how-import-finds-your-files)
 * [File format rules](#file-format-rules)
 * [Object type reference](#object-type-reference)
@@ -16,7 +16,7 @@ This page is the reference for where configuration lives and what goes in each f
 | Path | What it is |
 |---|---|
 | `start_here.sh`, `export.sh`, `import.sh`, `vault-*.sh`, `*_collections.sh`, `autocomplete.sh` | The scripts you run. |
-| `orgs_vars/` | **Your configuration**: organizations, environments, vaults, imports and exports. Not committed to this repo (see [Put your configuration under Git](HOW_TO.md#put-your-configuration-under-git)). |
+| `orgs_vars/` | **Your configuration**: workspaces, environments, vaults, imports and exports. Not committed to this repo (see [Put your configuration under Git](HOW_TO.md#put-your-configuration-under-git)). |
 | `templates/` | Templates `start_here.sh` copies into new environments (`vars.yml`, `vault.yml`, `vault_common.yml`). |
 | `script_vars/<version>/vars.env` | Per-AAP-version settings: valid tags, folders to create, Execution Environment image. |
 | `collections/<version>/` | Per-AAP-version collection requirements (`requirements.yml`, `requirements-git.yml`) and the installed collections. |
@@ -27,10 +27,10 @@ This page is the reference for where configuration lives and what goes in each f
 | `scripts/` | Internal helpers used by the scripts. Not run directly. |
 | `docs/` | This documentation. |
 
-## Organization and environment folders
+## Workspace and environment folders
 
 ```text
-orgs_vars/<org>/
+orgs_vars/<workspace>/
 ├── common/
 │   ├── vault.yml                       # shared secrets (encrypted)
 │   └── <type>.d/ ...                   # shared configuration
@@ -41,7 +41,7 @@ orgs_vars/<org>/
     ├── imports/
     │   └── <type>.d/ ...               # environment-specific configuration
     └── exports/
-        └── <org>_<env>_export_<timestamp>/
+        └── <workspace>_<env>_export_<timestamp>/
             ├── filetree_version/       # copy from here (default layout)
             └── flat_version/           # or from here (flatten_output: true)
 ```

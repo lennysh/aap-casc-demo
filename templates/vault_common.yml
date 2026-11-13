@@ -1,6 +1,6 @@
 ---
-# Common (organization-level) vault: secrets shared by every environment of this organization.
-# Loaded on import when import_common is true. Edit with: ./vault-edit.sh <org> common
+# Common (workspace-level) vault: secrets shared by every environment of this workspace.
+# Loaded on import when import_common is true. Edit with: ./vault-edit.sh <workspace> common
 #
 # Example:
 # vault_servicenow_password: "xxxxxxxx" #sensitive

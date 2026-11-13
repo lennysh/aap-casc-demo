@@ -19,9 +19,9 @@ What each AAP version needs, how the collections are installed, and which tags e
 | 2.4 | Automation Controller (plus organizations, teams, users, applications) | `infra.controller_configuration` |
 | 2.5 | Controller, Platform Gateway, Event-Driven Ansible, Automation Hub | `infra.aap_configuration`, `infra.aap_configuration_extended` |
 | 2.6 | Same as 2.5 | Same as 2.5 |
-| 2.7 | Same as 2.5 (work in progress) | Same as 2.5 |
+| 2.7 | Same as 2.5 | Same as 2.5 |
 
-The AAP version of each environment is stored in `orgs_vars/<org>/<env>/vars.env` (`CASC_AAP_VERSION`). You choose it when you run `start_here.sh`.
+The AAP version of each environment is stored in `orgs_vars/<workspace>/<env>/vars.env` (`CASC_AAP_VERSION`). You choose it when you run `start_here.sh`.
 
 ## Collections per AAP version
 
@@ -101,7 +101,7 @@ The repository is mounted into the container at the same path, so your `orgs_var
 
 ## Tags
 
-Run a script with only the org and env to print the tags valid for that environment:
+Run a script with only the workspace and env to print the tags valid for that environment:
 
 ```bash
 ./export.sh MyCompany prod
