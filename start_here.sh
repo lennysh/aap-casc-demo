@@ -19,6 +19,7 @@ vault_template_file="$parent_dir/templates/vault.yml"
 vault_common_template_file="$parent_dir/templates/vault_common.yml"
 # shellcheck source=scripts/vault_functions.sh
 source "$parent_dir/scripts/vault_functions.sh"
+orig_vault_password_file_env=${ANSIBLE_VAULT_PASSWORD_FILE:-}
 
 usage() {
     cat <<EOF
@@ -38,11 +39,16 @@ Options (all optional; anything not given is asked for interactively):
   --username <user>     AAP username; the password is read from \$AAP_PASSWORD or prompted
                         (set \$AAP_TOKEN instead to use an existing OAuth token)
   --no-verify-certs     Don't validate AAP's TLS certificate (self-signed certificates)
+  --org-filter <name>   Export only this AAP organization (sets organization_filter in vars.yml)
   --skip-test           Don't test the connection to AAP
   -y, --yes             Don't ask questions; use defaults and fail if required input is missing
                         (the vault password is still prompted unless \$CASC_VAULT_PASSWORD or a
                         vault password file is set)
   -h, --help            Show this help
+
+When adding an environment to a workspace that already has one, the AAP version, layout,
+certificate setting and username of the most recently set up environment are offered as
+defaults (and used with --yes unless given).
 
 Examples:
   $0                                        # fully interactive
@@ -61,7 +67,7 @@ die()  { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
 # --- Arguments ------------------------------------------------------------------------------
 org="" env="" opt_version="" opt_layout="" opt_hostname="" opt_username=""
-opt_verify_certs="" opt_skip_test=false assume_yes=false
+opt_verify_certs="" opt_skip_test=false assume_yes=false opt_org_filter=""
 choice=""
 positional=()
 while [[ $# -gt 0 ]]; do
@@ -72,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         --hostname)         [[ -n "${2:-}" ]] || die "--hostname needs a value"; opt_hostname=$2; shift 2 ;;
         --username)         [[ -n "${2:-}" ]] || die "--username needs a value"; opt_username=$2; shift 2 ;;
         --no-verify-certs)  opt_verify_certs=false; shift ;;
+        --org-filter)       [[ -n "${2:-}" ]] || die "--org-filter needs a value"; opt_org_filter=$2; shift 2 ;;
         --skip-test)        opt_skip_test=true; shift ;;
         -y|--yes)           assume_yes=true; shift ;;
         -h|--help)          usage; exit 0 ;;
@@ -161,6 +168,223 @@ curl_quote() {
     printf '"%s"' "$s"
 }
 
+# Python that can import yaml (the one ansible runs on), used to read vault and API data.
+vault_python=()
+find_vault_python() {
+    local shebang
+    [[ ${#vault_python[@]} -gt 0 ]] && return 0
+    shebang=$(head -1 "$(command -v ansible-vault)" 2>/dev/null || true)
+    if [[ "$shebang" == '#!'* ]]; then
+        read -ra vault_python <<< "${shebang#\#!}"
+        if "${vault_python[@]}" -c 'import yaml' 2>/dev/null; then
+            return 0
+        fi
+    fi
+    vault_python=(python3)
+    "${vault_python[@]}" -c 'import yaml' 2>/dev/null
+}
+
+# Decrypt a vault (password must already be available) and set vv_hostname, vv_verify,
+# vv_username, vv_password, vv_token. Returns non-zero if it can't be read.
+read_vault_values() {
+    local file=$1
+    vv_hostname="" vv_verify="" vv_username="" vv_password="" vv_token=""
+    find_vault_python || return 1
+    ansible-vault view "$file" >/dev/null 2>&1 || return 1
+    { IFS= read -r -d '' vv_hostname; IFS= read -r -d '' vv_verify; IFS= read -r -d '' vv_username
+      IFS= read -r -d '' vv_password; IFS= read -r -d '' vv_token; } < <(ansible-vault view "$file" 2>/dev/null | "${vault_python[@]}" -c '
+import sys, yaml
+d = yaml.safe_load(sys.stdin) or {}
+def v(k):
+    x = d.get(k)
+    if x is None: return ""
+    if isinstance(x, bool): return "true" if x else "false"
+    return str(x)
+for k in ("vault_aap_hostname", "vault_aap_validate_certs", "vault_aap_username", "vault_aap_password", "vault_aap_token"):
+    sys.stdout.write(v(k) + "\0")
+') || true
+    return 0
+}
+
+# Make sure the vault password opens <file>. A prompted password is asked again (3 tries);
+# a password from a file or $CASC_VAULT_PASSWORD that doesn't fit stops the wizard.
+unlock_vault() {
+    local file=$1 rel=${1#"$parent_dir"/} _
+    for _ in 1 2 3; do
+        ensure_vault_password "$file"
+        if ansible-vault view "$file" >/dev/null 2>&1; then
+            return 0
+        fi
+        if [[ "$VAULT_PASSWORD_PROMPTED" == "true" ]]; then
+            say "That password doesn't open $rel. Try again."
+            reset_prompted_vault_password
+        else
+            die "The configured vault password (\$CASC_VAULT_PASSWORD or vault password file) doesn't open $rel."
+        fi
+    done
+    die "Wrong vault password for $rel. Every vault in a workspace uses the same password."
+}
+
+# Path of the configured vault password file (env var or active ansible.cfg), even if missing.
+configured_password_file() {
+    local cfg
+    if [[ -n "$orig_vault_password_file_env" ]]; then
+        say "$orig_vault_password_file_env"
+    elif cfg=$(_vault_find_ansible_cfg); then
+        _vault_cfg_password_file "$cfg"
+    fi
+}
+
+password_file_in_use() {
+    local f
+    f=$(configured_password_file)
+    [[ -n "$f" && -f "$f" ]]
+}
+
+# Set or add "<key>=<value>" in the [defaults] section of an ansible.cfg, replacing a
+# commented-out or existing line for that key.
+cfg_set_default() {
+    local cfg=$1 key=$2 value=$3 tmp
+    tmp=$(mktemp)
+    KEY=$key VALUE=$value awk '
+        function emit() { print ENVIRON["KEY"] "=" ENVIRON["VALUE"]; done = 1 }
+        /^[[:space:]]*\[/ {
+            if (in_defaults && !done) emit()
+            in_defaults = ($0 ~ /^[[:space:]]*\[defaults\][[:space:]]*$/); seen = seen || in_defaults
+            print; next
+        }
+        in_defaults && !done && $0 ~ "^[[:space:]]*[#;]?[[:space:]]*" ENVIRON["KEY"] "[[:space:]]*[=:]" { emit(); next }
+        { print }
+        END {
+            if (in_defaults && !done) emit()
+            else if (!seen) { print ""; print "[defaults]"; emit() }
+        }' "$cfg" > "$tmp"
+    cat "$tmp" > "$cfg"
+    rm -f "$tmp"
+}
+
+# True if the repo's ansible.cfg is (or, once created, would be) the active config without
+# hiding the user's own settings: only $ANSIBLE_CONFIG and ~/.ansible.cfg are respected;
+# the system-wide /etc/ansible/ansible.cfg is just defaults and is overridden by the repo's.
+repo_cfg_is_active() {
+    local active
+    active=$(_vault_find_ansible_cfg || true)
+    [[ -z "$active" || "$active" == "$parent_dir/ansible.cfg" || "$active" == "/etc/ansible/ansible.cfg" ]]
+}
+
+ensure_repo_cfg() {
+    if [[ ! -f "$parent_dir/ansible.cfg" ]]; then
+        cp "$parent_dir/ansible.cfg.example" "$parent_dir/ansible.cfg"
+        info "Created ansible.cfg from ansible.cfg.example"
+    fi
+}
+
+# Offer to store the prompted vault password in a file so later runs don't ask.
+offer_save_vault_password() {
+    local ask_first=${1:-true} target cfg_note="" rel
+    [[ "$VAULT_PASSWORD_PROMPTED" == "true" && -n "${CASC_VAULT_PASSWORD:-}" ]] || return 0
+    interactive || return 0
+    if [[ "$ask_first" == "true" ]]; then
+        say ""
+        say "You'll be asked for this vault password on every export and import. It can be stored in a"
+        say "file instead (readable only by you); anyone who can read that file can decrypt your vaults."
+        confirm "Save the vault password to a file?" n || return 0
+    fi
+    target=$(configured_password_file)
+    # A password file set only in the system-wide config doesn't count once the repo has its own.
+    if [[ -n "$target" && -z "$orig_vault_password_file_env" && "$(_vault_find_ansible_cfg || true)" == "/etc/ansible/ansible.cfg" ]]; then
+        target=""
+    fi
+    if [[ -z "$target" ]]; then
+        target="$parent_dir/.vault_pass.txt"
+        if repo_cfg_is_active; then
+            ensure_repo_cfg
+            cfg_set_default "$parent_dir/ansible.cfg" vault_password_file .vault_pass.txt
+            cfg_note="enabled in ansible.cfg"
+        else
+            cfg_note="NOT enabled: your active config is $(_vault_find_ansible_cfg). Add 'vault_password_file = $target' to its [defaults] section"
+        fi
+    else
+        cfg_note="already configured"
+    fi
+    rel=${target#"$parent_dir"/}
+    if [[ -f "$target" ]]; then
+        if [[ "$(cat "$target")" == "$CASC_VAULT_PASSWORD" ]]; then
+            info "$rel already contains this password"
+        else
+            warn "$rel already exists with a different password; left unchanged."
+        fi
+        return 0
+    fi
+    mkdir -p "$(dirname "$target")"
+    (umask 077; printf '%s\n' "$CASC_VAULT_PASSWORD" > "$target")
+    info "Saved the vault password to $rel (mode 600; $cfg_note)"
+    [[ "$target" == "$parent_dir/.vault_pass.txt" ]] && info ".vault_pass.txt is in .gitignore; never commit it"
+    return 0
+}
+
+# Ask for an Automation Hub token and put it into the repo's ansible.cfg.
+offer_hub_token() {
+    local token
+    interactive || return 1
+    if ! repo_cfg_is_active; then
+        warn "Your active Ansible config is $(_vault_find_ansible_cfg); add the Automation Hub token there."
+        return 1
+    fi
+    if [[ -f "$parent_dir/ansible.cfg" ]] && ! grep -q '^\[galaxy_server\.certified\]' "$parent_dir/ansible.cfg"; then
+        warn "ansible.cfg has no [galaxy_server.certified] section; compare it with ansible.cfg.example."
+        return 1
+    fi
+    confirm "Paste your Automation Hub token now? (get one at https://console.redhat.com/ansible/automation-hub/token)" y || return 1
+    read -rsp "Automation Hub token (input hidden): " token
+    echo ""
+    [[ -n "$token" ]] || { warn "No token entered."; return 1; }
+    ensure_repo_cfg
+    local tmp
+    tmp=$(mktemp)
+    TOKEN=$token awk '
+        /^[[:space:]]*\[/ { hub = ($0 ~ /^\[galaxy_server\.(certified|validated)\]/) }
+        hub && /^[[:space:]]*token[[:space:]]*=[[:space:]]*$/ { print "token=" ENVIRON["TOKEN"]; next }
+        { print }' "$parent_dir/ansible.cfg" > "$tmp"
+    cat "$tmp" > "$parent_dir/ansible.cfg"
+    rm -f "$tmp"
+    chmod 600 "$parent_dir/ansible.cfg"
+    info "Saved the token to ansible.cfg (ignored by Git)"
+}
+
+# Set organization_filter in vars.yml (replacing an existing or commented-out line).
+set_org_filter() {
+    local name=$1 quoted tmp sq="'"
+    quoted="'${name//$sq/$sq$sq}'"
+    tmp=$(mktemp)
+    LINE="organization_filter: $quoted" awk '
+        !done && /^#?[[:space:]]*organization_filter:/ { print ENVIRON["LINE"]; done = 1; next }
+        !done && /^\.\.\.[[:space:]]*$/ { print ENVIRON["LINE"]; done = 1 }
+        { print }
+        END { if (!done) print ENVIRON["LINE"] }' "$vars_file" > "$tmp"
+    cat "$tmp" > "$vars_file"
+    rm -f "$tmp"
+}
+
+current_org_filter() {
+    [[ -f "$vars_file" ]] || return 0
+    sed -n "s/^organization_filter:[[:space:]]*['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}[[:space:]]*\$/\1/p" "$vars_file" | head -1
+}
+
+completion_in_bashrc() { grep -Fqs "$parent_dir/autocomplete.sh" "$HOME/.bashrc"; }
+
+offer_bash_completion() {
+    local line="source \"$parent_dir/autocomplete.sh\""
+    interactive || return 0
+    [[ "${SHELL##*/}" == "bash" ]] || return 0
+    completion_in_bashrc && return 0
+    say ""
+    if confirm "Enable Tab completion of workspace and environment names in new terminals (adds one line to ~/.bashrc)?" n; then
+        printf '\n# aap-casc-demo: Tab completion for workspace and environment names\n%s\n' "$line" >> "$HOME/.bashrc"
+        info "Added to ~/.bashrc. It applies to new terminals (or run now: $line)"
+    fi
+}
+
 # --- Preflight ------------------------------------------------------------------------------
 command -v ansible-vault >/dev/null 2>&1 || die "ansible-vault not found. Install ansible-core first (e.g. 'pip install ansible-core')."
 [[ -f "$vars_template_file" && -f "$vault_template_file" ]] || die "Templates are missing from $parent_dir/templates."
@@ -240,6 +464,26 @@ common_vault_file="$common_dir/vault.yml"
 rel_env="orgs_vars/$org/$env"
 rel_common="orgs_vars/$org/common"
 
+# Most recently set up other environment in this workspace, used for defaults.
+sibling_env="" sib_version="" sib_layout=""
+if [[ ! -f "$env_vars_file" && -d "$org_base_dir" ]]; then
+    # Complete environments (with a vault) first, newest first.
+    while IFS= read -r d; do
+        [[ "$d" == "$env_dir" || "$d" == "$common_dir" ]] && continue
+        sibling_env=$(basename "$d")
+        sib_version=$(sed -n 's/^CASC_AAP_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$d/vars.env")
+        [[ -d "$script_vars_dir/$sib_version" ]] || sib_version=""
+        if [[ -f "$d/vars.yml" ]] && grep -Eq '^flatten_output:[[:space:]]*(true|True|yes)' "$d/vars.yml"; then
+            sib_layout=flat
+        elif [[ -f "$d/vars.yml" ]]; then
+            sib_layout=filetree
+        fi
+        break
+    done < <(find "$org_base_dir" -mindepth 2 -maxdepth 2 -name vars.env -printf '%T@ %h\n' 2>/dev/null | sort -rn | cut -d' ' -f2- \
+             | while IFS= read -r d; do if [[ -f "$d/vault.yml" ]]; then echo "0 $d"; else echo "1 $d"; fi; done \
+             | sort -s -k1,1 | cut -d' ' -f2-)
+fi
+
 # --- Helpers that depend on the environment --------------------------------------------------
 created_folders=0
 ensure_folders() {
@@ -306,159 +550,15 @@ print_next_steps() {
     say "       ./import.sh $org $env -a --check"
     say "       ./import.sh $org $env -a"
     say ""
-    say "Guides: README.md and docs/HOW_TO.md. Tab completion: source \"$parent_dir/autocomplete.sh\""
+    say "Guides: README.md and docs/HOW_TO.md."
+    completion_in_bashrc || say "Tab completion for workspace/env names: source \"$parent_dir/autocomplete.sh\""
 }
-
-# --- Already complete? Show status and exit ---------------------------------------------------
-if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports_dir" && -d "$exports_dir" ]]; then
-    # shellcheck source=/dev/null
-    source "$env_vars_file"
-    layout=$(current_layout)
-    create_type_folders "$layout"
-    say "Environment '$env' in workspace '$org' is already set up:"
-    say "  AAP version:   ${CASC_AAP_VERSION:-unknown}"
-    say "  Import layout: $layout (flatten_output in $rel_env/vars.yml)"
-    if _vault_is_encrypted "$vault_file"; then
-        say "  Vault:         $rel_env/vault.yml (encrypted)"
-    else
-        say "  Vault:         $rel_env/vault.yml (⚠️  NOT encrypted; run: ansible-vault encrypt $rel_env/vault.yml)"
-    fi
-    if [[ -f "$common_vault_file" ]]; then
-        say "  Common vault:  $rel_common/vault.yml"
-    else
-        say "  Common vault:  missing (create with: ./vault-edit.sh $org common)"
-    fi
-    import_files=$(find "$imports_dir" -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | wc -l)
-    say "  Imports:       $import_files YAML file(s) in $rel_env/imports"
-    last=$(latest_export)
-    say "  Last export:   ${last:-none yet}"
-    say ""
-    say "Edit the vault with: ./vault-edit.sh $org $env   (view it with ./vault-view.sh $org $env)"
-    if [[ "$import_files" -eq 0 ]]; then
-        print_next_steps "$layout"
-    fi
-    exit 0
-fi
-
-if [[ -d "$env_dir" ]]; then
-    say "🔧 Repairing environment '$env' in workspace '$org' (only missing pieces are added)."
-else
-    say "🚀 Setting up environment '$env' in workspace '$org'."
-fi
-
-# --- Step: AAP version ------------------------------------------------------------------------
-if [[ -f "$env_vars_file" ]]; then
-    # shellcheck source=/dev/null
-    source "$env_vars_file"
-    step "AAP version"
-    info "Using AAP ${CASC_AAP_VERSION} from $rel_env/vars.env"
-else
-    step "AAP version"
-    if [[ -n "$opt_version" ]]; then
-        CASC_AAP_VERSION=$opt_version
-    else
-        interactive || die "No AAP version given. Use --version <ver> (available: ${available_versions[*]})."
-        version_labels=()
-        for v in "${available_versions[@]}"; do
-            label=$(bash -c 'source "$1" >/dev/null 2>&1; printf "%s" "${aap_version_label:-}"' _ "$script_vars_dir/$v/vars.env")
-            version_labels+=("AAP $v${label:+  ($label)}")
-        done
-        menu choice "Which AAP version is this environment?" "" "${version_labels[@]}"
-        CASC_AAP_VERSION=${available_versions[choice-1]}
-    fi
-    [[ -d "$script_vars_dir/$CASC_AAP_VERSION" ]] || die "Unsupported AAP version '$CASC_AAP_VERSION' (available: ${available_versions[*]})."
-    info "AAP $CASC_AAP_VERSION"
-fi
-
-# --- Step: import layout ----------------------------------------------------------------------
-step "Import layout"
-if [[ -f "$vars_file" ]]; then
-    layout=$(current_layout)
-    info "Using the $layout layout from $rel_env/vars.yml"
-elif [[ -n "$opt_layout" ]]; then
-    layout=$opt_layout
-    info "${layout^} layout"
-elif interactive; then
-    say "How should configuration files be organized for import? (Exports always contain both.)"
-    say ""
-    say "  1) Filetree (recommended)"
-    say "       One folder per object type, usually one file per object:"
-    say "         imports/controller_projects.d/Network Playbooks.yml"
-    say "         imports/controller_job_templates.d/Backup Configs.yml"
-    say "       Easy to review and merge in Git; matches how exports are organized."
-    say ""
-    say "  2) Flat"
-    say "       Any YAML files, anywhere under imports/ and common/; folder names don't matter:"
-    say "         imports/projects.yml       (contains controller_projects: [...])"
-    say "         imports/team-a/stuff.yml   (can contain several object types)"
-    say "       Handy for small or hand-written configurations."
-    say ""
-    say "  You can switch later with flatten_output in vars.yml. Details: docs/CONCEPTS.md#filetree-and-flat-layouts"
-    ask choice "Choose [1-2]" "1"
-    case "$choice" in
-        2|f|flat) layout=flat ;;
-        *)        layout=filetree ;;
-    esac
-    info "${layout^} layout"
-else
-    layout=filetree
-    info "Filetree layout (default)"
-fi
-
-# --- Step: tools and collections --------------------------------------------------------------
-step "Checking tools"
-core_version=$(ansible --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
-if command -v ansible-playbook >/dev/null 2>&1; then
-    info "ansible-core ${core_version:-?}"
-    if [[ "$CASC_AAP_VERSION" == "2.4" && -n "$core_version" ]] && \
-       [[ "$(printf '%s\n%s\n' "$core_version" "2.19" | sort -V | head -1)" == "2.19" ]]; then
-        warn "Importing into AAP 2.4 needs ansible-core 2.16-2.18 (you have $core_version)."
-        warn "Use a virtualenv with ansible-core 2.18, or --navigator with an AAP 2.4 Execution Environment."
-        warn "Exports work fine. See docs/VERSIONS_AND_COLLECTIONS.md#ansible-core-requirements"
-    fi
-else
-    warn "ansible-playbook not found. Install ansible-core, or use --navigator with an Execution Environment."
-fi
-collections_dir="$parent_dir/collections/$CASC_AAP_VERSION/ansible_collections"
-if [[ -d "$collections_dir" ]] && [[ -n "$(ls -A "$collections_dir" 2>/dev/null)" ]]; then
-    info "Collections for AAP $CASC_AAP_VERSION are installed"
-else
-    warn "Collections for AAP $CASC_AAP_VERSION aren't installed (needed unless you use --navigator)."
-    if ! grep -Eqs '^[[:space:]]*token[[:space:]]*=[[:space:]]*[^[:space:]]' "$parent_dir/ansible.cfg"; then
-        warn "Installing needs a Red Hat Automation Hub token in ansible.cfg:"
-        warn "  cp ansible.cfg.example ansible.cfg, then fill in the token= lines"
-        warn "  (get a token at https://console.redhat.com/ansible/automation-hub/token)"
-    fi
-    if interactive && confirm "Install them now with ./install_collections.sh $CASC_AAP_VERSION?" y; then
-        if ! "$parent_dir/install_collections.sh" "$CASC_AAP_VERSION"; then
-            warn "Installation failed (see above). Fix it and run ./install_collections.sh $CASC_AAP_VERSION later."
-        fi
-    else
-        info "Install later with: ./install_collections.sh $CASC_AAP_VERSION"
-    fi
-fi
-
-# --- Step: folders and settings files ---------------------------------------------------------
-step "Folders and settings"
-if [[ ! -f "$env_vars_file" ]]; then
-    mkdir -p "$env_dir"
-    {
-        echo "CASC_AAP_VERSION=\"$CASC_AAP_VERSION\""
-        echo "FLATTEN_OUTPUT=$([[ "$layout" == "flat" ]] && echo true || echo false)"
-    } > "$env_vars_file"
-    info "Wrote $rel_env/vars.env"
-fi
-create_type_folders "$layout"
-if [[ ! -f "$vars_file" ]]; then
-    cp "$vars_template_file" "$vars_file"
-    if [[ "$layout" == "flat" ]]; then
-        sed -i 's/^flatten_output: .*/flatten_output: true/' "$vars_file"
-    fi
-    info "Wrote $rel_env/vars.yml (import options; see the comments inside)"
-fi
 
 # --- Step: connection details and vaults ------------------------------------------------------
 aap_hostname="" aap_verify_certs="" aap_auth="" aap_username="" aap_password="" aap_token=""
+# Defaults offered by collect_connection_details (from a sibling environment or the current vault).
+def_hostname="" def_verify="" def_auth="" def_username="" def_password="" def_token=""
+api_base="" api_server="" test_result=""
 
 collect_connection_details() {
     aap_hostname=${opt_hostname:-$aap_hostname}
@@ -467,7 +567,7 @@ collect_connection_details() {
         local hint="the platform gateway URL"
         [[ "$CASC_AAP_VERSION" == "2.4" ]] && hint="the Automation Controller URL"
         while [[ -z "$aap_hostname" ]]; do
-            ask aap_hostname "AAP URL ($hint, e.g. https://aap.example.com)"
+            ask aap_hostname "AAP URL ($hint, e.g. https://aap.example.com)" "$def_hostname"
         done
     fi
     aap_hostname=${aap_hostname%/}
@@ -475,7 +575,8 @@ collect_connection_details() {
     if [[ -n "$opt_verify_certs" ]]; then
         aap_verify_certs=$opt_verify_certs
     elif [[ -z "$aap_verify_certs" ]]; then
-        if confirm "Validate AAP's TLS certificate? (answer n for self-signed certificates)" y; then
+        if confirm "Validate AAP's TLS certificate? (answer n for self-signed certificates)" \
+                "$([[ "$def_verify" == "false" ]] && echo n || echo y)"; then
             aap_verify_certs=true
         else
             aap_verify_certs=false
@@ -487,29 +588,37 @@ collect_connection_details() {
     elif [[ -n "$opt_username" ]]; then
         aap_auth=password aap_username=$opt_username aap_password=${AAP_PASSWORD:-}
     elif interactive; then
-        menu choice "How should the scripts log in to AAP?" 1 \
+        menu choice "How should the scripts log in to AAP?" "$([[ "$def_auth" == "token" ]] && echo 2 || echo 1)" \
             "Username and password (recommended; a temporary token is created for each run)" \
             "An existing OAuth token"
         if [[ "$choice" == "2" ]]; then
             aap_auth=token
         else
             aap_auth=password
-            ask aap_username "AAP username" "${aap_username:-admin}"
+            ask aap_username "AAP username" "${def_username:-admin}"
         fi
+    elif [[ -n "$def_username" && -n "${AAP_PASSWORD:-}" ]]; then
+        aap_auth=password aap_username=$def_username aap_password=$AAP_PASSWORD
     else
         die "No AAP credentials given. Use --username <user> with \$AAP_PASSWORD, or set \$AAP_TOKEN."
     fi
 
     if [[ "$aap_auth" == "password" && -z "$aap_password" ]]; then
         interactive || die "No password for '$aap_username'. Set \$AAP_PASSWORD."
+        local keep=""
+        [[ -n "$def_password" && "$aap_username" == "$def_username" ]] && keep=" (Enter keeps the current one)"
         while [[ -z "$aap_password" ]]; do
-            read -rsp "AAP password for $aap_username: " aap_password
+            read -rsp "AAP password for $aap_username$keep: " aap_password
             echo ""
+            if [[ -z "$aap_password" && -n "$keep" ]]; then aap_password=$def_password; fi
         done
     elif [[ "$aap_auth" == "token" && -z "$aap_token" ]]; then
+        local keep=""
+        [[ -n "$def_token" ]] && keep=" (Enter keeps the current one)"
         while [[ -z "$aap_token" ]]; do
-            read -rsp "AAP OAuth token: " aap_token
+            read -rsp "AAP OAuth token$keep: " aap_token
             echo ""
+            if [[ -z "$aap_token" && -n "$keep" ]]; then aap_token=$def_token; fi
         done
     fi
 }
@@ -563,6 +672,7 @@ test_connection() {
         return
     fi
     info "Reached AAP $detected"
+    api_base=$base api_server=$server
 
     local cfg
     cfg="url = $(curl_quote "$base$me_path")"$'\n'
@@ -600,44 +710,61 @@ test_connection() {
     test_result=ok
 }
 
-render_vault() {
-    local line
+# Rewrite the connection keys of a vault's plaintext (stdin -> stdout), keeping everything else.
+# Keys that don't exist yet are added before the YAML end marker (or at the end).
+apply_connection_to_vault() {
+    local line wrote_host=false wrote_verify=false wrote_user=false wrote_pass=false wrote_token=false
+    _missing_keys() {
+        [[ "$wrote_host" == "true" ]] || printf 'vault_aap_hostname: %s\n' "$(yaml_quote "$aap_hostname")"
+        [[ "$wrote_verify" == "true" ]] || printf 'vault_aap_validate_certs: %s\n' "$aap_verify_certs"
+        if [[ "$aap_auth" == "token" ]]; then
+            [[ "$wrote_token" == "true" ]] || printf 'vault_aap_token: %s #sensitive\n' "$(yaml_quote "$aap_token")"
+        else
+            [[ "$wrote_user" == "true" ]] || printf 'vault_aap_username: %s\n' "$(yaml_quote "$aap_username")"
+            [[ "$wrote_pass" == "true" ]] || printf 'vault_aap_password: %s #sensitive\n' "$(yaml_quote "$aap_password")"
+        fi
+        wrote_host=true wrote_verify=true wrote_user=true wrote_pass=true wrote_token=true
+    }
     while IFS= read -r line || [[ -n "$line" ]]; do
         case "$line" in
             vault_aap_hostname:*)
-                printf 'vault_aap_hostname: %s\n' "$(yaml_quote "$aap_hostname")" ;;
+                printf 'vault_aap_hostname: %s\n' "$(yaml_quote "$aap_hostname")"; wrote_host=true ;;
             vault_aap_validate_certs:*)
-                printf 'vault_aap_validate_certs: %s\n' "$aap_verify_certs" ;;
-            vault_aap_username:*)
-                if [[ "$aap_auth" == "token" ]]; then printf '# %s\n' "$line"
-                else printf 'vault_aap_username: %s\n' "$(yaml_quote "$aap_username")"; fi ;;
-            vault_aap_password:*)
-                if [[ "$aap_auth" == "token" ]]; then printf '# %s\n' "$line"
-                else printf 'vault_aap_password: %s #sensitive\n' "$(yaml_quote "$aap_password")"; fi ;;
-            "# vault_aap_token:"*)
-                if [[ "$aap_auth" == "token" ]]; then printf 'vault_aap_token: %s #sensitive\n' "$(yaml_quote "$aap_token")"
-                else printf '%s\n' "$line"; fi ;;
+                printf 'vault_aap_validate_certs: %s\n' "$aap_verify_certs"; wrote_verify=true ;;
+            vault_aap_username:*|"# vault_aap_username:"*)
+                if [[ "$aap_auth" == "token" ]]; then printf '# %s\n' "${line#\# }"
+                else printf 'vault_aap_username: %s\n' "$(yaml_quote "$aap_username")"; wrote_user=true; fi ;;
+            vault_aap_password:*|"# vault_aap_password:"*)
+                if [[ "$aap_auth" == "token" ]]; then printf '# vault_aap_password: "" #sensitive\n'
+                else printf 'vault_aap_password: %s #sensitive\n' "$(yaml_quote "$aap_password")"; wrote_pass=true; fi ;;
+            vault_aap_token:*|"# vault_aap_token:"*)
+                if [[ "$aap_auth" == "token" ]]; then printf 'vault_aap_token: %s #sensitive\n' "$(yaml_quote "$aap_token")"; wrote_token=true
+                elif [[ "$line" == "#"* ]]; then printf '%s\n' "$line"
+                else printf '# vault_aap_token: "" #sensitive\n'; fi ;;
+            ...)
+                _missing_keys; printf '%s\n' "$line" ;;
             *)
                 printf '%s\n' "$line" ;;
         esac
-    done < "$vault_template_file"
+    done
+    _missing_keys
 }
 
-need_env_vault=false need_common_vault=false
-[[ -f "$vault_file" ]] || need_env_vault=true
-[[ ! -f "$common_vault_file" && -f "$vault_common_template_file" ]] && need_common_vault=true
+render_vault() {
+    apply_connection_to_vault < "$vault_template_file"
+}
 
-if [[ "$need_env_vault" == "true" ]]; then
-    step "Connection to AAP"
-    say "These details are stored encrypted in $rel_env/vault.yml."
+# Ask for connection details and test them until they work (or the user saves/quits).
+connection_loop() {
     while true; do
         collect_connection_details
         if [[ "$opt_skip_test" == "true" ]]; then
-            break
+            test_result=skipped
+            return 0
         fi
         test_connection
         case "$test_result" in
-            ok|skipped) break ;;
+            ok|skipped) return 0 ;;
         esac
         interactive || die "Connection test failed. Fix the details, or re-run with --skip-test to save them anyway."
         if [[ "$test_result" == "cert" && "$aap_verify_certs" == "true" ]]; then
@@ -648,24 +775,355 @@ if [[ "$need_env_vault" == "true" ]]; then
         fi
         menu choice "What now?" 1 "Re-enter the connection details" "Save them anyway" "Quit"
         case "$choice" in
-            1) aap_hostname="" aap_verify_certs="" aap_password="" aap_token=""
+            1) def_hostname=$aap_hostname def_verify=$aap_verify_certs def_auth=$aap_auth def_username=$aap_username
+               aap_hostname="" aap_verify_certs="" aap_password="" aap_token=""
                opt_hostname="" opt_verify_certs="" opt_username="" ;;
-            2) break ;;
+            2) return 0 ;;
             3) say "Nothing was saved to the vault. Re-run ./start_here.sh $org $env when ready."; exit 1 ;;
+        esac
+    done
+}
+
+# Load connection details from an existing (unlocked) vault into the def_* defaults.
+load_defaults_from_vault() {
+    read_vault_values "$1" || return 1
+    def_hostname=$vv_hostname def_verify=$vv_verify def_username=$vv_username
+    def_password=$vv_password def_token=$vv_token def_auth=password
+    [[ -n "$vv_token" && -z "$vv_password" ]] && def_auth=token
+    return 0
+}
+
+# List AAP organization names (after a successful connection test).
+fetch_org_names() {
+    local path cfg
+    [[ -n "$api_base" ]] || return 1
+    find_vault_python || return 1
+    path="/api/gateway/v1/organizations/?page_size=200&order_by=name"
+    [[ "$api_server" == "controller" ]] && path="/api/v2/organizations/?page_size=200&order_by=name"
+    cfg="url = $(curl_quote "$api_base$path")"$'\n'
+    if [[ "$aap_auth" == "token" ]]; then
+        cfg+="header = $(curl_quote "Authorization: Bearer $aap_token")"$'\n'
+    else
+        cfg+="user = $(curl_quote "$aap_username:$aap_password")"$'\n'
+    fi
+    [[ "$aap_verify_certs" == "false" ]] && cfg+="insecure"$'\n'
+    printf '%s' "$cfg" | curl -sSf --max-time 15 -K - 2>/dev/null | "${vault_python[@]}" -c '
+import json, sys
+for o in json.load(sys.stdin).get("results", []):
+    if o.get("name"): print(o["name"])
+' 2>/dev/null
+}
+
+choose_org_filter() {
+    local current names=() opts i
+    [[ -f "$vars_file" ]] || return 0
+    current=$(current_org_filter)
+    if [[ -n "$opt_org_filter" ]]; then
+        set_org_filter "$opt_org_filter"
+        info "Exports limited to AAP organization '$opt_org_filter' (organization_filter in vars.yml)"
+        return 0
+    fi
+    [[ -z "$current" ]] || return 0
+    interactive || return 0
+    step "Organizations to export"
+    say "Exports can include every AAP organization your user can see, or just one (organization_filter"
+    say "in vars.yml). This only affects exports; imports apply whatever is in your files."
+    if [[ "$test_result" == "ok" ]]; then
+        mapfile -t names < <(fetch_org_names || true)
+    fi
+    if [[ ${#names[@]} -gt 0 ]]; then
+        opts=("All organizations (no filter)" "${names[@]}" "Type a name")
+        menu choice "Which organizations should be exported?" 1 "${opts[@]}"
+        if (( choice == 1 )); then
+            info "All organizations"
+            return 0
+        elif (( choice == ${#opts[@]} )); then
+            ask current "AAP organization name"
+        else
+            current=${names[choice-2]}
+        fi
+    else
+        confirm "Limit exports to one AAP organization?" n || { info "All organizations"; return 0; }
+        ask current "AAP organization name"
+    fi
+    [[ -n "$current" ]] || return 0
+    set_org_filter "$current"
+    info "Exports limited to '$current' (organization_filter in $rel_env/vars.yml)"
+}
+
+# Re-encrypt the environment vault with new connection details, keeping other secrets.
+update_env_vault() {
+    local tmp="$vault_file.tmp.$$"
+    if ! ansible-vault view "$vault_file" | apply_connection_to_vault | ansible-vault encrypt --output "$tmp" >/dev/null; then
+        rm -f "$tmp"
+        die "Failed to update $rel_env/vault.yml; it was left unchanged."
+    fi
+    mv "$tmp" "$vault_file"
+    info "Updated the connection details in $rel_env/vault.yml (other secrets kept)"
+}
+
+
+
+# --- Already complete? Show status (and a menu) ---------------------------------------------
+if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports_dir" && -d "$exports_dir" ]]; then
+    # shellcheck source=/dev/null
+    source "$env_vars_file"
+    layout=$(current_layout)
+    create_type_folders "$layout"
+    show_status() {
+        local import_files last filter
+        say ""
+        say "Environment '$env' in workspace '$org' is set up:"
+        say "  AAP version:   ${CASC_AAP_VERSION:-unknown}"
+        say "  Import layout: $layout (flatten_output in $rel_env/vars.yml)"
+        filter=$(current_org_filter)
+        if [[ -n "$filter" ]]; then
+            say "  Export scope:  AAP organization '$filter' (organization_filter)"
+        else
+            say "  Export scope:  all AAP organizations"
+        fi
+        if _vault_is_encrypted "$vault_file"; then
+            say "  Vault:         $rel_env/vault.yml (encrypted)"
+        else
+            say "  Vault:         $rel_env/vault.yml (⚠️  NOT encrypted; run: ansible-vault encrypt $rel_env/vault.yml)"
+        fi
+        if [[ -f "$common_vault_file" ]]; then
+            say "  Common vault:  $rel_common/vault.yml"
+        else
+            say "  Common vault:  missing (create with: ./vault-edit.sh $org common)"
+        fi
+        import_files=$(find "$imports_dir" -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | wc -l)
+        say "  Imports:       $import_files YAML file(s) in $rel_env/imports"
+        last=$(latest_export)
+        say "  Last export:   ${last:-none yet}"
+        say ""
+    }
+    show_status
+    if ! interactive; then
+        say "Edit the vault with: ./vault-edit.sh $org $env   (view it with ./vault-view.sh $org $env)"
+        exit 0
+    fi
+    while true; do
+        opts=("Test the connection to AAP" "Update the connection details (URL, certificate check, login)")
+        password_file_in_use || opts+=("Save the vault password to a file (stop being asked for it)")
+        opts+=("Show next steps" "Exit")
+        menu choice "What would you like to do?" "${#opts[@]}" "${opts[@]}"
+        case "${opts[choice-1]}" in
+            "Test the connection"*)
+                unlock_vault "$vault_file"
+                load_defaults_from_vault "$vault_file" || die "Couldn't read $rel_env/vault.yml."
+                if [[ "$def_hostname" == "aap.mycompany.com" ]]; then
+                    warn "The vault still has the template hostname; choose 'Update the connection details'."
+                    continue
+                fi
+                aap_hostname=$def_hostname aap_verify_certs=${def_verify:-true} aap_auth=$def_auth
+                aap_username=$def_username aap_password=$def_password aap_token=$def_token
+                step "Connection test"
+                test_connection
+                [[ "$test_result" == "ok" ]] && info "The saved connection details work."
+                say "" ;;
+            "Update the connection details"*)
+                unlock_vault "$vault_file"
+                load_defaults_from_vault "$vault_file" || true
+                step "Connection to AAP"
+                aap_hostname="" aap_verify_certs="" aap_password="" aap_token=""
+                connection_loop
+                update_env_vault
+                say "" ;;
+            "Save the vault password"*)
+                unlock_vault "$vault_file"
+                if [[ "$VAULT_PASSWORD_PROMPTED" == "true" ]]; then
+                    offer_save_vault_password false
+                else
+                    info "The vault password already comes from \$CASC_VAULT_PASSWORD or a password file."
+                fi
+                say "" ;;
+            "Show next steps")
+                print_next_steps "$layout" ;;
+            *)
+                offer_bash_completion
+                exit 0 ;;
         esac
     done
 fi
 
+if [[ -d "$env_dir" ]]; then
+    say "🔧 Repairing environment '$env' in workspace '$org' (only missing pieces are added)."
+else
+    say "🚀 Setting up environment '$env' in workspace '$org'."
+fi
+
+# --- Step: AAP version ------------------------------------------------------------------------
+if [[ -f "$env_vars_file" ]]; then
+    # shellcheck source=/dev/null
+    source "$env_vars_file"
+    step "AAP version"
+    info "Using AAP ${CASC_AAP_VERSION} from $rel_env/vars.env"
+else
+    step "AAP version"
+    if [[ -n "$sibling_env" ]]; then
+        say "Defaults are taken from environment '$sibling_env' in this workspace."
+    fi
+    if [[ -n "$opt_version" ]]; then
+        CASC_AAP_VERSION=$opt_version
+    elif ! interactive && [[ -n "$sib_version" ]]; then
+        CASC_AAP_VERSION=$sib_version
+    else
+        interactive || die "No AAP version given. Use --version <ver> (available: ${available_versions[*]})."
+        version_labels=() default_idx=""
+        for i in "${!available_versions[@]}"; do
+            v=${available_versions[i]}
+            label=$(bash -c 'source "$1" >/dev/null 2>&1; printf "%s" "${aap_version_label:-}"' _ "$script_vars_dir/$v/vars.env")
+            version_labels+=("AAP $v${label:+  ($label)}")
+            [[ "$v" == "$sib_version" ]] && default_idx=$((i + 1))
+        done
+        menu choice "Which AAP version is this environment?" "$default_idx" "${version_labels[@]}"
+        CASC_AAP_VERSION=${available_versions[choice-1]}
+    fi
+    [[ -d "$script_vars_dir/$CASC_AAP_VERSION" ]] || die "Unsupported AAP version '$CASC_AAP_VERSION' (available: ${available_versions[*]})."
+    info "AAP $CASC_AAP_VERSION"
+fi
+
+# --- Step: import layout ----------------------------------------------------------------------
+step "Import layout"
+if [[ -f "$vars_file" ]]; then
+    layout=$(current_layout)
+    info "Using the $layout layout from $rel_env/vars.yml"
+elif [[ -n "$opt_layout" ]]; then
+    layout=$opt_layout
+    info "${layout^} layout"
+elif interactive; then
+    say "How should configuration files be organized for import? (Exports always contain both.)"
+    say ""
+    say "  1) Filetree (recommended)"
+    say "       One folder per object type, usually one file per object:"
+    say "         imports/controller_projects.d/Network Playbooks.yml"
+    say "         imports/controller_job_templates.d/Backup Configs.yml"
+    say "       Easy to review and merge in Git; matches how exports are organized."
+    say ""
+    say "  2) Flat"
+    say "       Any YAML files, anywhere under imports/ and common/; folder names don't matter:"
+    say "         imports/projects.yml       (contains controller_projects: [...])"
+    say "         imports/team-a/stuff.yml   (can contain several object types)"
+    say "       Handy for small or hand-written configurations."
+    say ""
+    say "  You can switch later with flatten_output in vars.yml. Details: docs/CONCEPTS.md#filetree-and-flat-layouts"
+    ask choice "Choose [1-2]" "$([[ "$sib_layout" == "flat" ]] && echo 2 || echo 1)"
+    case "$choice" in
+        2|f|flat) layout=flat ;;
+        *)        layout=filetree ;;
+    esac
+    info "${layout^} layout"
+elif [[ -n "$sib_layout" ]]; then
+    layout=$sib_layout
+    info "${layout^} layout (same as '$sibling_env')"
+else
+    layout=filetree
+    info "Filetree layout (default)"
+fi
+
+# --- Step: tools and collections --------------------------------------------------------------
+step "Checking tools"
+core_version=$(ansible --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
+if command -v ansible-playbook >/dev/null 2>&1; then
+    info "ansible-core ${core_version:-?}"
+    if [[ "$CASC_AAP_VERSION" == "2.4" && -n "$core_version" ]] && \
+       [[ "$(printf '%s\n%s\n' "$core_version" "2.19" | sort -V | head -1)" == "2.19" ]]; then
+        warn "Importing into AAP 2.4 needs ansible-core 2.16-2.18 (you have $core_version)."
+        warn "Use a virtualenv with ansible-core 2.18, or --navigator with an AAP 2.4 Execution Environment."
+        warn "Exports work fine. See docs/VERSIONS_AND_COLLECTIONS.md#ansible-core-requirements"
+    fi
+else
+    warn "ansible-playbook not found. Install ansible-core, or use --navigator with an Execution Environment."
+fi
+collections_dir="$parent_dir/collections/$CASC_AAP_VERSION/ansible_collections"
+if [[ -d "$collections_dir" ]] && [[ -n "$(ls -A "$collections_dir" 2>/dev/null)" ]]; then
+    info "Collections for AAP $CASC_AAP_VERSION are installed"
+else
+    warn "Collections for AAP $CASC_AAP_VERSION aren't installed (needed unless you use --navigator)."
+    if ! grep -Eqs '^[[:space:]]*token[[:space:]]*=[[:space:]]*[^[:space:]]' "$parent_dir/ansible.cfg"; then
+        warn "Installing needs a Red Hat Automation Hub token in ansible.cfg (for ansible.controller"
+        warn "and ansible.platform)."
+        if ! offer_hub_token; then
+            warn "To add it later: cp ansible.cfg.example ansible.cfg, then fill in the token= lines"
+            warn "(get a token at https://console.redhat.com/ansible/automation-hub/token)"
+        fi
+    fi
+    if interactive && confirm "Install them now with ./install_collections.sh $CASC_AAP_VERSION?" y; then
+        if ! (cd "$parent_dir" && ./install_collections.sh "$CASC_AAP_VERSION"); then
+            warn "Installation failed (see above). Fix it and run ./install_collections.sh $CASC_AAP_VERSION later."
+        fi
+    else
+        info "Install later with: ./install_collections.sh $CASC_AAP_VERSION"
+    fi
+fi
+
+# --- Step: folders and settings files ---------------------------------------------------------
+step "Folders and settings"
+if [[ ! -f "$env_vars_file" ]]; then
+    mkdir -p "$env_dir"
+    {
+        echo "CASC_AAP_VERSION=\"$CASC_AAP_VERSION\""
+        echo "FLATTEN_OUTPUT=$([[ "$layout" == "flat" ]] && echo true || echo false)"
+    } > "$env_vars_file"
+    info "Wrote $rel_env/vars.env"
+fi
+create_type_folders "$layout"
+if [[ ! -f "$vars_file" ]]; then
+    cp "$vars_template_file" "$vars_file"
+    if [[ "$layout" == "flat" ]]; then
+        sed -i 's/^flatten_output: .*/flatten_output: true/' "$vars_file"
+    fi
+    info "Wrote $rel_env/vars.yml (import options; see the comments inside)"
+fi
+
+need_env_vault=false need_common_vault=false
+[[ -f "$vault_file" ]] || need_env_vault=true
+[[ ! -f "$common_vault_file" && -f "$vault_common_template_file" ]] && need_common_vault=true
+
+# An existing vault in this workspace whose password new vaults must share.
+reference_vault=""
+for f in "$common_vault_file" "$vault_file"; do
+    if _vault_is_encrypted "$f"; then reference_vault=$f; break; fi
+done
+if [[ -z "$reference_vault" ]]; then
+    while IFS= read -r f; do
+        if _vault_is_encrypted "$f"; then reference_vault=$f; break; fi
+    done < <(find "$org_base_dir" -mindepth 2 -maxdepth 2 -name vault.yml -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
+fi
+
 if [[ "$need_env_vault" == "true" || "$need_common_vault" == "true" ]]; then
     step "Vault password"
-    if [[ "$need_env_vault" == "true" && "$need_common_vault" == "false" && -f "$common_vault_file" ]]; then
-        say "If asked, use the same vault password as $rel_common/vault.yml, so one password unlocks the whole workspace."
+    if [[ -n "$reference_vault" ]]; then
+        say "Vaults in a workspace share one password. Enter the password for this workspace"
+        say "(it's checked against ${reference_vault#"$parent_dir"/})."
+        unlock_vault "$reference_vault"
+        info "Vault password OK"
+    elif [[ -n "${CASC_VAULT_PASSWORD:-}" ]]; then
+        info "Encrypting the new vault(s) with the password from \$CASC_VAULT_PASSWORD"
+        ensure_vault_password --confirm
+    elif password_file_in_use; then
+        info "Encrypting the new vault(s) with the password in $(configured_password_file)"
     else
-        say "Choose a password to encrypt the vault(s). You'll need it for every export and import"
-        say "(or store it in a file; see 'Vault password' in README.md)."
+        say "Choose a password to encrypt this workspace's vaults (connection details and secrets)."
+        say "Every environment in the workspace uses the same password."
+        ensure_vault_password --confirm
     fi
-    ensure_vault_password --confirm
+    offer_save_vault_password
 fi
+
+if [[ "$need_env_vault" == "true" ]]; then
+    # Defaults from the sibling environment's vault (same password).
+    if [[ -n "$sibling_env" && -f "$org_base_dir/$sibling_env/vault.yml" ]] && \
+       load_defaults_from_vault "$org_base_dir/$sibling_env/vault.yml"; then
+        def_hostname="" def_password="" def_token=""
+    fi
+    step "Connection to AAP"
+    say "These details are stored encrypted in $rel_env/vault.yml."
+    connection_loop
+fi
+
+choose_org_filter
 
 if [[ "$need_env_vault" == "true" ]]; then
     if ! render_vault | ansible-vault encrypt --output "$vault_file" >/dev/null; then
@@ -688,4 +1146,6 @@ fi
 say ""
 say "✅ Environment '$env' in workspace '$org' is ready (AAP $CASC_AAP_VERSION, $layout layout)."
 say "   Edit connection details or secrets any time with: ./vault-edit.sh $org $env"
+say "   Check or update this environment later with:      ./start_here.sh $org $env"
+offer_bash_completion
 print_next_steps "$layout"

@@ -101,7 +101,13 @@ A typical change workflow: create a branch, edit files, run `./import.sh ... --c
 
 The new environment shares `orgs_vars/MyCompany/common/` with the existing ones. When asked, use the **same vault password** as the workspace's existing common vault, so one password decrypts everything in that workspace.
 
-To check an existing environment, run `./start_here.sh MyCompany test` again. It prints the AAP version, layout, vault status and last export, and adds anything that's missing.
+The wizard suggests the AAP version, layout, certificate setting and username of the workspace's most recently set up environment, and checks that the vault password you enter opens the workspace's existing vaults.
+
+To check an existing environment, run `./start_here.sh MyCompany test` again. It shows the AAP version, layout, export scope, vault status and last export, adds anything that's missing, and offers a menu to:
+
+* **test the connection** with the saved details;
+* **update the connection details** (URL, certificate check, login). Other secrets in the vault are kept;
+* **save the vault password to a file**, if you're still typing it each time.
 
 ## Add a new object
 
@@ -268,7 +274,7 @@ Set `organization_filter` in the environment's `vars.yml`:
 organization_filter: 'Network Team'
 ```
 
-Then export as usual. Remove or empty the option to export everything again.
+Then export as usual. Remove or empty the option to export everything again. (`start_here.sh` asks about this when you create an environment, listing the organizations it finds in AAP; unattended, use `--org-filter '<name>'`.)
 
 If each AAP organization is managed separately (for example by a different team), a common pattern is one workspace per AAP organization, named after it, with `organization_filter` set in each of its environments:
 
@@ -294,10 +300,10 @@ Environments can be created unattended too (for example in a bootstrap pipeline)
 export CASC_VAULT_PASSWORD=...          # encrypts the new vaults
 export AAP_PASSWORD=...                 # or AAP_TOKEN=... instead of --username
 ./start_here.sh MyCompany prod --version 2.6 --filetree \
-  --hostname https://aap.example.com --username admin --yes
+  --hostname https://aap.example.com --username admin --org-filter 'Network Team' --yes
 ```
 
-`--yes` never asks questions and fails if something required is missing. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
+`--yes` never asks questions and fails if something required is missing. When the workspace already has an environment, its AAP version, layout, certificate setting and username are used for anything you don't pass. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
 
 * `CASC_VAULT_PASSWORD` supplies the vault password without a prompt. Alternatively, provide a password file through `ANSIBLE_VAULT_PASSWORD_FILE`.
 * Without a terminal and without a password source, the scripts stop with an explanation instead of hanging on a prompt.

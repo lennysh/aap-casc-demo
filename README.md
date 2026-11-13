@@ -96,10 +96,13 @@ This walk-through exports an existing AAP instance and imports it again. It's th
     The setup wizard asks:
     * **the AAP version** of that instance;
     * **the import layout:** choose *Filetree* unless you have a reason not to (see [Filetree or flat?](docs/CONCEPTS.md#filetree-and-flat-layouts));
+    * **a vault password**, which encrypts the connection details and other secrets. All environments in a workspace share one password, and the wizard checks it against the workspace's existing vaults. It can also save it to a file so you aren't asked every time;
     * **how to reach AAP:** URL, certificate validation, and a username and password (or an existing token). It then **tests the connection** and warns you if the server's version doesn't match what you chose;
-    * **a vault password**, which encrypts the connection details and other secrets in `vault.yml`.
+    * **which AAP organizations to export:** all of them, or one picked from a list fetched from AAP.
 
-    It also checks your tools, offers to install missing collections, and finishes with the exact commands to run next. Run it again any time to see an environment's status or repair missing pieces.
+    It also checks your tools and offers to install missing collections (asking for your Automation Hub token if needed). When you add another environment to a workspace, it suggests the settings of an existing one. It finishes with the exact commands to run next.
+
+    Run it again on an existing environment to see its status, test the saved connection, update the connection details, or store the vault password in a file.
 
 4. **Export everything:**
 
@@ -250,7 +253,7 @@ Scripts that need the vault password get it from the first of these that works:
 
 If a configured password file is missing, the script says so and prompts. If there's no terminal to prompt on, it stops and explains how to provide the password.
 
-**To stop typing the password**, keep it in a file (only in a trusted environment):
+**To stop typing the password**, keep it in a file (only in a trusted environment). `start_here.sh` offers to do this for you; to do it by hand:
 
 ```bash
 echo 'my-vault-password' > .vault_pass.txt && chmod 600 .vault_pass.txt

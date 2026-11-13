@@ -26,6 +26,8 @@
 # Requires $parent_dir (the repository root) to be set by the caller.
 
 VAULT_PASSWORD_FROM_ENV=false
+# true when ensure_vault_password prompted for the password during this run
+VAULT_PASSWORD_PROMPTED=false
 
 # parent_dir is set by the sourcing script.
 # shellcheck disable=SC2154
@@ -142,6 +144,16 @@ ensure_vault_password() {
     export CASC_VAULT_PASSWORD="$password"
     export ANSIBLE_VAULT_PASSWORD_FILE="$parent_dir/scripts/vault_pass_from_env.sh"
     VAULT_PASSWORD_FROM_ENV=true
+    VAULT_PASSWORD_PROMPTED=true
+}
+
+# Forget a password that was prompted for, so the next ensure_vault_password asks again.
+reset_prompted_vault_password() {
+    if [[ "$VAULT_PASSWORD_PROMPTED" == "true" ]]; then
+        unset CASC_VAULT_PASSWORD ANSIBLE_VAULT_PASSWORD_FILE
+        VAULT_PASSWORD_FROM_ENV=false
+        VAULT_PASSWORD_PROMPTED=false
+    fi
 }
 
 # Extra ansible-navigator args to pass the prompted password into the EE. The repo is

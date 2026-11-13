@@ -40,6 +40,12 @@ Tell the script what to process: `-a` for everything, or `-t "<tags>"`.
 **`Invalid workspace name` / `Invalid environment name` / `'common' is reserved`**
 Names may contain letters, digits, `.`, `_` and `-`, and must start with a letter or digit. `common` can't be an environment name because it's the workspace's shared folder.
 
+**`That password doesn't open orgs_vars/<workspace>/common/vault.yml`**
+Every vault in a workspace uses the same password, and the wizard checks the one you enter against an existing vault. Enter that workspace's password. If you've forgotten it, the existing vaults can't be decrypted; you'll need to recreate them (delete them and re-run the wizard).
+
+**`The configured vault password ... doesn't open ...`**
+The password from `$CASC_VAULT_PASSWORD` or your vault password file belongs to a different workspace. Use the right one, or unset it to be prompted.
+
 **I picked the wrong AAP version or layout in the wizard**
 Change `CASC_AAP_VERSION` in `orgs_vars/<workspace>/<env>/vars.env`, or `flatten_output` in `vars.yml`. Or delete the file and run `./start_here.sh <workspace> <env>` again to be asked again. If you change the version, re-run the wizard so it creates that version's folders.
 
@@ -49,6 +55,9 @@ The wizard tests the connection before saving your credentials. If the test fail
 
 **`Can't reach https://...: Could not resolve host`** / **`Connection refused`** / **`timed out`**
 Check the URL, DNS, VPN and proxy settings. The test uses `curl`, so `https_proxy` / `no_proxy` apply.
+
+**I need to change the saved URL, password or token**
+Run `./start_here.sh <workspace> <env>` and choose **Update the connection details**. It re-tests the connection and keeps the other secrets in the vault. Or edit the vault directly with `./vault-edit.sh <workspace> <env>`.
 
 **`TLS problem talking to ...`**
 The certificate isn't trusted (often self-signed). The wizard offers to turn off certificate validation; or install the CA certificate on your machine and keep validation on.
