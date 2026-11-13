@@ -2,6 +2,7 @@ ansible_collections/
 vault.yml
 !templates/**
 .vault_pass.txt
+.vault_pass/
 temp/
 ansible.cfg
 ansible-navigator.*

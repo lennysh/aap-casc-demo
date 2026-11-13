@@ -42,6 +42,7 @@ if [[ $# -lt 2 ]]; then
 fi
 
 org=$1
+VAULT_WORKSPACE=$org
 env=$2
 org_base_dir="$orgs_vars_dir/$org"
 

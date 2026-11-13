@@ -42,6 +42,7 @@ if [[ $# -lt 2 ]]; then
 fi
 
 org=$1
+VAULT_WORKSPACE=$org
 env=$2
 org_base_dir="$orgs_vars_dir/$org"
 
@@ -84,7 +85,9 @@ if [[ ! -f "$file_to_edit" ]]; then
         echo "Error: Vault template not found: $template"
         exit 1
     fi
-    ensure_vault_password --confirm
+    # A new vault must use the same password as the workspace's existing vaults.
+    reference_vault=$(find "$org_base_dir" -mindepth 2 -maxdepth 2 -name vault.yml 2>/dev/null | head -1)
+    ensure_vault_password --confirm ${reference_vault:+"$reference_vault"}
     echo "Creating new vault from template: $template"
     cp "$template" "$file_to_edit"
     echo "Encrypting new vault..."

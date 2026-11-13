@@ -40,11 +40,17 @@ Tell the script what to process: `-a` for everything, or `-t "<tags>"`.
 **`Invalid workspace name` / `Invalid environment name` / `'common' is reserved`**
 Names may contain letters, digits, `.`, `_` and `-`, and must start with a letter or digit. `common` can't be an environment name because it's the workspace's shared folder.
 
-**`That password doesn't open orgs_vars/<workspace>/common/vault.yml`**
-Every vault in a workspace uses the same password, and the wizard checks the one you enter against an existing vault. Enter that workspace's password. If you've forgotten it, the existing vaults can't be decrypted; you'll need to recreate them (delete them and re-run the wizard).
+**`That password doesn't open orgs_vars/<workspace>/.../vault.yml`**
+Every vault in a workspace uses the same password, and the one you type is checked against an existing vault (three tries). Enter that workspace's password. If you've forgotten it, the existing vaults can't be decrypted; you'll need to recreate them (delete them and re-run the wizard).
 
-**`The configured vault password ... doesn't open ...`**
-The password from `$CASC_VAULT_PASSWORD` or your vault password file belongs to a different workspace. Use the right one, or unset it to be prompted.
+**`Note: the shared vault password file ... doesn't open ...; this workspace uses a different password`**
+Not an error. Your shared password file (`ansible.cfg` or `ANSIBLE_VAULT_PASSWORD_FILE`) holds another workspace's password, so you're asked for this workspace's password instead. To stop being asked, save it to `.vault_pass/<workspace>.txt` (`./start_here.sh <workspace> <env>` offers this).
+
+**`Note: .vault_pass/<workspace>.txt doesn't open ...`**
+The workspace's password file holds the wrong password (for example, the vaults were re-keyed). Fix or delete the file; until then you're asked for the password.
+
+**`The vault password in $CASC_VAULT_PASSWORD doesn't open ...`**
+`$CASC_VAULT_PASSWORD` holds a different workspace's password. Set the right one, or unset it to use a password file or the prompt.
 
 **I picked the wrong AAP version or layout in the wizard**
 Change `CASC_AAP_VERSION` in `orgs_vars/<workspace>/<env>/vars.env`, or `flatten_output` in `vars.yml`. Or delete the file and run `./start_here.sh <workspace> <env>` again to be asked again. If you change the version, re-run the wizard so it creates that version's folders.
@@ -76,14 +82,14 @@ The version you chose doesn't match the server. Either choose the right version,
 **The script asks for a vault password every time**
 That's the default when no password file is configured. To avoid it, see [Vault password](../README.md#vault-password-prompt-or-password-file).
 
-**`Note: ... sets vault_password_file = ..., but that file doesn't exist.`**
+**`Note: the vault password file '...' (ansible.cfg or ANSIBLE_VAULT_PASSWORD_FILE) doesn't exist.`**
 `ansible.cfg` (or `ANSIBLE_VAULT_PASSWORD_FILE`) points to a missing file, so the script prompts instead. Create the file, or comment out the setting.
 
 **`Error: A vault password is required, but no usable vault password file was found and this shell isn't interactive`**
-You're running without a terminal (CI, cron, a pipe). Set `CASC_VAULT_PASSWORD`, or provide a password file. See [Run without prompts](HOW_TO.md#run-without-prompts-cicd).
+You're running without a terminal (CI, cron, a pipe). Set `CASC_VAULT_PASSWORD`, or save the workspace's password to `.vault_pass/<workspace>.txt`. See [Run without prompts](HOW_TO.md#run-without-prompts-cicd).
 
 **`Decryption failed (no vault secrets were found that could decrypt)`**
-The password is wrong for that vault file. All vaults in a workspace (environments and `common`) should share one password. If they don't, re-key one with `ansible-vault rekey <file>`.
+The password is wrong for that vault file. All vaults in a workspace (environments and `common`) must share one password. If they don't, re-key one with `ansible-vault rekey <file>`. Different workspaces may use different passwords.
 
 **`Attempting to decrypt but no vault secrets found`** or **`The vault password file ... was not found`**
 These appear when running `ansible-playbook` or `ansible-vault` directly, outside the scripts. Pass `--ask-vault-pass` or `--vault-password-file <file>`, or use the scripts, which handle it for you.

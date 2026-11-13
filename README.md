@@ -96,7 +96,7 @@ This walk-through exports an existing AAP instance and imports it again. It's th
     The setup wizard asks:
     * **the AAP version** of that instance;
     * **the import layout:** choose *Filetree* unless you have a reason not to (see [Filetree or flat?](docs/CONCEPTS.md#filetree-and-flat-layouts));
-    * **a vault password**, which encrypts the connection details and other secrets. All environments in a workspace share one password, and the wizard checks it against the workspace's existing vaults. It can also save it to a file so you aren't asked every time;
+    * **a vault password**, which encrypts the connection details and other secrets. All environments in a workspace share one password (the wizard checks it against the workspace's existing vaults); different workspaces can use different passwords. It can save the password to `.vault_pass/<workspace>.txt` so you aren't asked every time;
     * **how to reach AAP:** URL, certificate validation, and a username and password (or an existing token). It then **tests the connection** and warns you if the server's version doesn't match what you chose;
     * **which AAP organizations to export:** all of them, or one picked from a list fetched from AAP.
 
@@ -244,31 +244,37 @@ Use `./vault-edit.sh <workspace> <env>` to edit a vault (use `common` as the env
 
 ### Vault password: prompt or password file
 
+Each **workspace** has one vault password, shared by all of its environments and its `common/` vault. Different workspaces can use different passwords, or the same one; it's up to you.
+
 Scripts that need the vault password get it from the first of these that works:
 
 1. The **`CASC_VAULT_PASSWORD`** environment variable (handy for CI and other non-interactive runs).
-2. The **`ANSIBLE_VAULT_PASSWORD_FILE`** environment variable, if that file exists.
-3. **`vault_password_file`** in the `[defaults]` section of the active `ansible.cfg`, if the line is uncommented and the file exists. Ansible looks for `ansible.cfg` in `$ANSIBLE_CONFIG`, then this repo's `ansible.cfg`, then `~/.ansible.cfg`, then `/etc/ansible/ansible.cfg`.
-4. Otherwise, a **prompt**: once per run (twice when creating a new vault, to confirm). The password stays in memory for that run and is never written to disk. It's passed to `ansible-navigator` too.
+2. **The workspace's password file**, `.vault_pass/<workspace>.txt` in the repository root.
+3. **A shared password file**: the `ANSIBLE_VAULT_PASSWORD_FILE` environment variable, or `vault_password_file` in the `[defaults]` section of the active `ansible.cfg` (`$ANSIBLE_CONFIG`, then this repo's `ansible.cfg`, then `~/.ansible.cfg`, then `/etc/ansible/ansible.cfg`).
+4. Otherwise, a **prompt**: once per run (twice when creating a new workspace's first vault, to confirm). The password stays in memory for that run and is never written to disk. It's passed to `ansible-navigator` too.
 
-If a configured password file is missing, the script says so and prompts. If there's no terminal to prompt on, it stops and explains how to provide the password.
+Password files are checked against the workspace's vaults before they're used. A file that holds a different password is skipped with a note, and you're asked instead. So a shared password file and per-workspace passwords can be mixed: workspaces whose vaults match the shared file use it, the rest use their own file or are prompted. A typed password is checked too, and you get three tries.
 
-**To stop typing the password**, keep it in a file (only in a trusted environment). `start_here.sh` offers to do this for you; to do it by hand:
+If there's no terminal to prompt on, the script stops and explains how to provide the password.
+
+**To stop typing the password**, save it per workspace (only in a trusted environment). `start_here.sh` offers this when you create a workspace, and its menu offers it for existing environments. By hand:
 
 ```bash
-echo 'my-vault-password' > .vault_pass.txt && chmod 600 .vault_pass.txt
-cp ansible.cfg.example ansible.cfg      # then uncomment: vault_password_file=.vault_pass.txt
+mkdir -p -m 700 .vault_pass
+(umask 077; echo 'my-vault-password' > .vault_pass/MyCompany.txt)
 ```
 
-`.vault_pass.txt` and `ansible.cfg` are already in `.gitignore`. Alternatively, `export ANSIBLE_VAULT_PASSWORD_FILE=/path/to/.vault_pass.txt`.
+`.vault_pass/` is in `.gitignore`. It lives in the repository root rather than under `orgs_vars/`, so it can't end up in your configuration repository, and `ansible-navigator` can still read it (the repository is mounted into the Execution Environment).
+
+**One password for everything:** if all your workspaces share one password, a single shared file is simpler. Create `.vault_pass.txt` (mode 600) and uncomment `vault_password_file=.vault_pass.txt` in `ansible.cfg` (copied from `ansible.cfg.example`), or set `ANSIBLE_VAULT_PASSWORD_FILE`. When you create a new workspace while a shared file is configured, `start_here.sh` asks whether to use that password or a new one for the workspace.
 
 ### Environment variables
 
 | Variable | Effect |
 |---|---|
 | `CASC_USE_PLAYBOOK` | Unset, `1`, `true` or `yes`: use `ansible-playbook` (default). Any other value: use `ansible-navigator`. The `--playbook` / `--navigator` flags override it. |
-| `CASC_VAULT_PASSWORD` | Vault password for non-interactive runs (see above). |
-| `ANSIBLE_VAULT_PASSWORD_FILE` | Standard Ansible vault password file setting. |
+| `CASC_VAULT_PASSWORD` | Vault password for non-interactive runs (see above). It applies to whichever workspace you run against, so set it per run when workspaces have different passwords. |
+| `ANSIBLE_VAULT_PASSWORD_FILE` | Standard Ansible vault password file setting, used as the shared password file. |
 | `CONTROLLER_REQUEST_TIMEOUT` | API timeout in seconds for exports (default `60`). Raise it for very large instances. |
 | `ANSIBLE_VERBOSITY` | Ansible output detail, for example `3` (same as `-vvv`) when troubleshooting. |
 

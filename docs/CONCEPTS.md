@@ -220,4 +220,4 @@ Environments in the same workspace share `common/`, so they should all use the s
 
 **Workspace:** `orgs_vars/<workspace>/`, a folder grouping related environments that share `common/` configuration (for example a company name). Not the same as an AAP organization.
 
-**Vault password:** the password that decrypts your vault files. See [Vault password](../README.md#vault-password-prompt-or-password-file).
+**Vault password:** the password that decrypts your vault files. There's one per workspace; different workspaces can use different passwords. It's typed at a prompt, or read from `.vault_pass/<workspace>.txt` or a shared password file. See [Vault password](../README.md#vault-password-prompt-or-password-file).

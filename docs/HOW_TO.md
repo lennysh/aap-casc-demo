@@ -89,7 +89,7 @@ What to commit in your configuration repo:
 * ✅ `common/`, `<env>/imports/`, `<env>/vars.yml`, `<env>/vars.env`
 * ✅ `vault.yml` files, **only while encrypted** (check that each starts with `$ANSIBLE_VAULT`)
 * ❌ `<env>/exports/` (raw, regenerable output). Add `*/*/exports/` to that repo's `.gitignore`.
-* ❌ Your vault password file
+* ❌ Your vault password files. `.vault_pass/` and `.vault_pass.txt` live in the tool repository's root, outside `orgs_vars/`, and are ignored there.
 
 A typical change workflow: create a branch, edit files, run `./import.sh ... --check` against a test environment, open a pull request, merge, then import.
 
@@ -99,7 +99,7 @@ A typical change workflow: create a branch, edit files, run `./import.sh ... --c
 ./start_here.sh MyCompany test
 ```
 
-The new environment shares `orgs_vars/MyCompany/common/` with the existing ones. When asked, use the **same vault password** as the workspace's existing common vault, so one password decrypts everything in that workspace.
+The new environment shares `orgs_vars/MyCompany/common/` with the existing ones, and uses the workspace's vault password: the wizard reads it from `.vault_pass/MyCompany.txt` (or a shared password file) if one fits, or asks for it and checks it against the existing vaults.
 
 The wizard suggests the AAP version, layout, certificate setting and username of the workspace's most recently set up environment, and checks that the vault password you enter opens the workspace's existing vaults.
 
@@ -107,7 +107,7 @@ To check an existing environment, run `./start_here.sh MyCompany test` again. It
 
 * **test the connection** with the saved details;
 * **update the connection details** (URL, certificate check, login). Other secrets in the vault are kept;
-* **save the vault password to a file**, if you're still typing it each time.
+* **save the workspace's vault password** to `.vault_pass/<workspace>.txt`, if you're still typing it each time.
 
 ## Add a new object
 
@@ -305,7 +305,7 @@ export AAP_PASSWORD=...                 # or AAP_TOKEN=... instead of --username
 
 `--yes` never asks questions and fails if something required is missing. When the workspace already has an environment, its AAP version, layout, certificate setting and username are used for anything you don't pass. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
 
-* `CASC_VAULT_PASSWORD` supplies the vault password without a prompt. Alternatively, provide a password file through `ANSIBLE_VAULT_PASSWORD_FILE`.
+* `CASC_VAULT_PASSWORD` supplies the vault password without a prompt. If your workspaces have different passwords, set it per job (for example from a per-workspace CI secret). Alternatively, write the password to `.vault_pass/<workspace>.txt` (mode 600) at the start of the job.
 * Without a terminal and without a password source, the scripts stop with an explanation instead of hanging on a prompt.
 * A common pipeline: on pull request, run `--check` against a test environment; on merge, import into test, then (after approval) into prod.
 
@@ -317,7 +317,8 @@ ANSIBLE_COLLECTIONS_PATH=$PWD/collections/2.6 ansible-playbook import_export.yml
   -e import_export_mode=import -e casc_aap_version=2.6 \
   -e "{orgs: MyCompany, dir_orgs_vars: orgs_vars, env: prod}" \
   -e "{env_dir: $PWD/orgs_vars/MyCompany/prod}" -e "{common_dir: $PWD/orgs_vars/MyCompany/common}" \
-  -e @orgs_vars/MyCompany/prod/vault.yml -e @orgs_vars/MyCompany/prod/vars.yml
+  -e @orgs_vars/MyCompany/prod/vault.yml -e @orgs_vars/MyCompany/prod/vars.yml \
+  --vault-password-file .vault_pass/MyCompany.txt     # or --ask-vault-pass
 ```
 
 ## Use an Execution Environment

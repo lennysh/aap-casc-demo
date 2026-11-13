@@ -19,7 +19,6 @@ vault_template_file="$parent_dir/templates/vault.yml"
 vault_common_template_file="$parent_dir/templates/vault_common.yml"
 # shellcheck source=scripts/vault_functions.sh
 source "$parent_dir/scripts/vault_functions.sh"
-orig_vault_password_file_env=${ANSIBLE_VAULT_PASSWORD_FILE:-}
 
 usage() {
     cat <<EOF
@@ -42,8 +41,8 @@ Options (all optional; anything not given is asked for interactively):
   --org-filter <name>   Export only this AAP organization (sets organization_filter in vars.yml)
   --skip-test           Don't test the connection to AAP
   -y, --yes             Don't ask questions; use defaults and fail if required input is missing
-                        (the vault password is still prompted unless \$CASC_VAULT_PASSWORD or a
-                        vault password file is set)
+                        (the vault password is still prompted unless \$CASC_VAULT_PASSWORD,
+                        .vault_pass/<workspace>.txt or a shared vault password file provides it)
   -h, --help            Show this help
 
 When adding an environment to a workspace that already has one, the AAP version, layout,
@@ -206,61 +205,40 @@ for k in ("vault_aap_hostname", "vault_aap_validate_certs", "vault_aap_username"
     return 0
 }
 
-# Make sure the vault password opens <file>. A prompted password is asked again (3 tries);
-# a password from a file or $CASC_VAULT_PASSWORD that doesn't fit stops the wizard.
+# Make sure the vault password opens <file>. Password files that don't fit and wrong typed
+# passwords are handled by ensure_vault_password (it falls back to / repeats the prompt).
 unlock_vault() {
-    local file=$1 rel=${1#"$parent_dir"/} _
-    for _ in 1 2 3; do
-        ensure_vault_password "$file"
-        if ansible-vault view "$file" >/dev/null 2>&1; then
-            return 0
-        fi
-        if [[ "$VAULT_PASSWORD_PROMPTED" == "true" ]]; then
-            say "That password doesn't open $rel. Try again."
-            reset_prompted_vault_password
-        else
-            die "The configured vault password (\$CASC_VAULT_PASSWORD or vault password file) doesn't open $rel."
-        fi
-    done
-    die "Wrong vault password for $rel. Every vault in a workspace uses the same password."
+    local file=$1 rel=${1#"$parent_dir"/}
+    ensure_vault_password "$file"
+    ansible-vault view "$file" >/dev/null 2>&1 && return 0
+    [[ "$VAULT_PASSWORD_SOURCE" != "env" ]] || die "The vault password in \$CASC_VAULT_PASSWORD doesn't open $rel."
+    # Resolved earlier without a vault to check against; look it up again, verified.
+    forget_vault_password
+    ensure_vault_password "$file"
+    ansible-vault view "$file" >/dev/null 2>&1 || die "Couldn't decrypt $rel."
 }
 
-# Path of the configured vault password file (env var or active ansible.cfg), even if missing.
-configured_password_file() {
-    local cfg
-    if [[ -n "$orig_vault_password_file_env" ]]; then
-        say "$orig_vault_password_file_env"
-    elif cfg=$(_vault_find_ansible_cfg); then
-        _vault_cfg_password_file "$cfg"
+# Where this workspace's vault password comes from, without prompting.
+describe_vault_password_source() {
+    local wsfile global
+    wsfile=$(vault_workspace_password_file "$org")
+    global=$(vault_global_password_file)
+    if [[ -n "${CASC_VAULT_PASSWORD:-}" ]]; then
+        say "\$CASC_VAULT_PASSWORD"
+    elif [[ -f "$wsfile" ]]; then
+        say "${wsfile#"$parent_dir"/} (this workspace's password file)"
+    elif [[ -n "$global" && -f "$global" ]] && { ! _vault_is_encrypted "$vault_file" || _vault_try_password_file "$global" "$vault_file"; }; then
+        say "shared password file $global"
+    elif [[ -n "$global" && -f "$global" ]]; then
+        say "asked on each run (the shared password file $global holds a different password)"
+    else
+        say "asked on each run"
     fi
 }
 
-password_file_in_use() {
-    local f
-    f=$(configured_password_file)
-    [[ -n "$f" && -f "$f" ]]
-}
-
-# Set or add "<key>=<value>" in the [defaults] section of an ansible.cfg, replacing a
-# commented-out or existing line for that key.
-cfg_set_default() {
-    local cfg=$1 key=$2 value=$3 tmp
-    tmp=$(mktemp)
-    KEY=$key VALUE=$value awk '
-        function emit() { print ENVIRON["KEY"] "=" ENVIRON["VALUE"]; done = 1 }
-        /^[[:space:]]*\[/ {
-            if (in_defaults && !done) emit()
-            in_defaults = ($0 ~ /^[[:space:]]*\[defaults\][[:space:]]*$/); seen = seen || in_defaults
-            print; next
-        }
-        in_defaults && !done && $0 ~ "^[[:space:]]*[#;]?[[:space:]]*" ENVIRON["KEY"] "[[:space:]]*[=:]" { emit(); next }
-        { print }
-        END {
-            if (in_defaults && !done) emit()
-            else if (!seen) { print ""; print "[defaults]"; emit() }
-        }' "$cfg" > "$tmp"
-    cat "$tmp" > "$cfg"
-    rm -f "$tmp"
+# True if the user is typing this workspace's vault password (no file or variable provides it).
+password_is_prompted() {
+    [[ "$(describe_vault_password_source)" == "asked on each run"* ]]
 }
 
 # True if the repo's ansible.cfg is (or, once created, would be) the active config without
@@ -279,47 +257,26 @@ ensure_repo_cfg() {
     fi
 }
 
-# Offer to store the prompted vault password in a file so later runs don't ask.
+# Offer to store a typed vault password as this workspace's password file.
 offer_save_vault_password() {
-    local ask_first=${1:-true} target cfg_note="" rel
+    local ask_first=${1:-true} file rel
     [[ "$VAULT_PASSWORD_PROMPTED" == "true" && -n "${CASC_VAULT_PASSWORD:-}" ]] || return 0
     interactive || return 0
+    rel=$(vault_workspace_password_file "$org")
+    rel=${rel#"$parent_dir"/}
     if [[ "$ask_first" == "true" ]]; then
         say ""
-        say "You'll be asked for this vault password on every export and import. It can be stored in a"
-        say "file instead (readable only by you); anyone who can read that file can decrypt your vaults."
-        confirm "Save the vault password to a file?" n || return 0
+        say "You'll be asked for this password on every export and import in workspace '$org'."
+        say "It can be saved to $rel instead: readable only by you and used only for this"
+        say "workspace (other workspaces keep their own passwords). Anyone who can read that file can"
+        say "decrypt this workspace's vaults."
+        confirm "Save the vault password for workspace '$org' to $rel?" n || return 0
     fi
-    target=$(configured_password_file)
-    # A password file set only in the system-wide config doesn't count once the repo has its own.
-    if [[ -n "$target" && -z "$orig_vault_password_file_env" && "$(_vault_find_ansible_cfg || true)" == "/etc/ansible/ansible.cfg" ]]; then
-        target=""
-    fi
-    if [[ -z "$target" ]]; then
-        target="$parent_dir/.vault_pass.txt"
-        if repo_cfg_is_active; then
-            ensure_repo_cfg
-            cfg_set_default "$parent_dir/ansible.cfg" vault_password_file .vault_pass.txt
-            cfg_note="enabled in ansible.cfg"
-        else
-            cfg_note="NOT enabled: your active config is $(_vault_find_ansible_cfg). Add 'vault_password_file = $target' to its [defaults] section"
-        fi
+    if file=$(save_workspace_password_file "$org" "$CASC_VAULT_PASSWORD"); then
+        info "Saved to ${file#"$parent_dir"/} (mode 600; .vault_pass/ is in .gitignore, never commit it)"
     else
-        cfg_note="already configured"
+        warn "$rel already exists with a different password; left unchanged."
     fi
-    rel=${target#"$parent_dir"/}
-    if [[ -f "$target" ]]; then
-        if [[ "$(cat "$target")" == "$CASC_VAULT_PASSWORD" ]]; then
-            info "$rel already contains this password"
-        else
-            warn "$rel already exists with a different password; left unchanged."
-        fi
-        return 0
-    fi
-    mkdir -p "$(dirname "$target")"
-    (umask 077; printf '%s\n' "$CASC_VAULT_PASSWORD" > "$target")
-    info "Saved the vault password to $rel (mode 600; $cfg_note)"
-    [[ "$target" == "$parent_dir/.vault_pass.txt" ]] && info ".vault_pass.txt is in .gitignore; never commit it"
     return 0
 }
 
@@ -426,6 +383,7 @@ if [[ -z "$org" ]]; then
     fi
 fi
 check_org_name "$org"
+VAULT_WORKSPACE=$org
 
 if [[ -z "$env" ]]; then
     interactive || { usage >&2; die "Missing <env>."; }
@@ -887,6 +845,7 @@ if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports
         else
             say "  Vault:         $rel_env/vault.yml (⚠️  NOT encrypted; run: ansible-vault encrypt $rel_env/vault.yml)"
         fi
+        say "  Password:      $(describe_vault_password_source)"
         if [[ -f "$common_vault_file" ]]; then
             say "  Common vault:  $rel_common/vault.yml"
         else
@@ -905,7 +864,9 @@ if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports
     fi
     while true; do
         opts=("Test the connection to AAP" "Update the connection details (URL, certificate check, login)")
-        password_file_in_use || opts+=("Save the vault password to a file (stop being asked for it)")
+        if password_is_prompted; then
+            opts+=("Save this workspace's vault password to a file (stop being asked for it)")
+        fi
         opts+=("Show next steps" "Exit")
         menu choice "What would you like to do?" "${#opts[@]}" "${opts[@]}"
         case "${opts[choice-1]}" in
@@ -930,12 +891,12 @@ if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports
                 connection_loop
                 update_env_vault
                 say "" ;;
-            "Save the vault password"*)
+            "Save this workspace's vault password"*)
                 unlock_vault "$vault_file"
                 if [[ "$VAULT_PASSWORD_PROMPTED" == "true" ]]; then
                     offer_save_vault_password false
                 else
-                    info "The vault password already comes from \$CASC_VAULT_PASSWORD or a password file."
+                    info "The vault password already comes $(vault_password_source_label)."
                 fi
                 say "" ;;
             "Show next steps")
@@ -1094,19 +1055,40 @@ fi
 
 if [[ "$need_env_vault" == "true" || "$need_common_vault" == "true" ]]; then
     step "Vault password"
+    new_ws_password_file=$(vault_workspace_password_file "$org")
+    shared_password_file=$(vault_global_password_file)
     if [[ -n "$reference_vault" ]]; then
-        say "Vaults in a workspace share one password. Enter the password for this workspace"
-        say "(it's checked against ${reference_vault#"$parent_dir"/})."
+        say "All vaults in a workspace share one password; it's checked against ${reference_vault#"$parent_dir"/}."
         unlock_vault "$reference_vault"
-        info "Vault password OK"
+        info "Vault password OK ($(vault_password_source_label))"
     elif [[ -n "${CASC_VAULT_PASSWORD:-}" ]]; then
         info "Encrypting the new vault(s) with the password from \$CASC_VAULT_PASSWORD"
         ensure_vault_password --confirm
-    elif password_file_in_use; then
-        info "Encrypting the new vault(s) with the password in $(configured_password_file)"
+    elif [[ -f "$new_ws_password_file" ]]; then
+        info "Encrypting the new vault(s) with ${new_ws_password_file#"$parent_dir"/}"
+        ensure_vault_password --confirm
+    elif [[ -n "$shared_password_file" && -f "$shared_password_file" ]]; then
+        use_shared=true
+        if interactive; then
+            say "A shared vault password file is configured ($shared_password_file). This new workspace"
+            say "can use that password, or one of its own (you'll be asked for it, or can save it to"
+            say "${new_ws_password_file#"$parent_dir"/})."
+            menu choice "Which vault password should workspace '$org' use?" 1 \
+                "The password in $shared_password_file (same as other workspaces using it)" \
+                "A new password for this workspace only"
+            if [[ "$choice" == "2" ]]; then
+                use_shared=false
+            fi
+        fi
+        if [[ "$use_shared" == "true" ]]; then
+            info "Encrypting the new vault(s) with the password in $shared_password_file"
+            ensure_vault_password --confirm
+        else
+            ensure_vault_password --confirm --ignore-global
+        fi
     else
         say "Choose a password to encrypt this workspace's vaults (connection details and secrets)."
-        say "Every environment in the workspace uses the same password."
+        say "Every environment in the workspace uses this password; other workspaces can use different ones."
         ensure_vault_password --confirm
     fi
     offer_save_vault_password
