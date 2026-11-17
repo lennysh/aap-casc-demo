@@ -12,11 +12,14 @@ script_vars_dir="$parent_dir/script_vars"
 usage() {
     local org_context=$1
     local env_context=$2
-    echo "Usage: $0 <workspace> <env> [--playbook|--navigator] [--check|-C] [-o|--export-path <dir>] [-a|--all] [-t|--tags <tags>]"
+    echo "Usage: $0 <workspace> <env> [--playbook|--navigator] [--check|-C] [-o|--export-path <dir>] [--clean] [-a|--all] [-t|--tags <tags>]"
     echo "  --playbook    Use ansible-playbook with versioned collections (default). Overrides CASC_USE_PLAYBOOK."
     echo "  --navigator   Use ansible-navigator with the EE from script_vars. Overrides CASC_USE_PLAYBOOK."
     echo "  --check, -C   Run in Ansible check mode (dry-run; no changes)."
     echo "  -o, --export-path <dir>  Write export to this directory instead of orgs_vars/.../exports/<timestamp>."
+    echo "  --clean       Before exporting, delete flat_version/ and filetree_version/ in the export directory,"
+    echo "                so objects removed from AAP don't linger from a previous export. Other files in the"
+    echo "                directory (e.g. .git) are kept. Use it when re-exporting into the same -o directory."
     echo "  Default: CASC_USE_PLAYBOOK env (unset/1/true/yes = playbook; anything else = navigator)."
     echo ""
 
@@ -80,6 +83,7 @@ case "${CASC_USE_PLAYBOOK:-1}" in
 esac
 CUSTOM_EXPORT_PATH=""
 CHECK_MODE=false
+CLEAN_EXPORT=false
 filtered_args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -102,6 +106,10 @@ while [[ $# -gt 0 ]]; do
             fi
             CUSTOM_EXPORT_PATH=$2
             shift 2
+            ;;
+        --clean)
+            CLEAN_EXPORT=true
+            shift
             ;;
         *)
             filtered_args+=("$1")
@@ -126,6 +134,27 @@ else
     export_dest="$orgs_vars_dir/$org/$env/exports/$dest_folder"
 fi
 cd "$parent_dir" || { echo "Failed to change directory to $parent_dir"; exit 1; }
+
+# --- --clean: remove the previous export's layout folders before writing a new one ---
+# Called right before the playbook runs (after all validation), so a failed check never
+# deletes the last export. Runs after the cd above, so a relative -o path resolves the same
+# way it does for the playbook. Only the two folders the export writes are removed; anything
+# else in the directory (e.g. a .git folder) is left alone.
+clean_export_dest() {
+    [[ "$CLEAN_EXPORT" == "true" ]] || return 0
+    if [[ "$CHECK_MODE" == "true" ]]; then
+        echo "Note: --clean skipped in check mode (nothing is written, so the previous export is kept)."
+        return 0
+    fi
+    local sub target
+    for sub in flat_version filetree_version; do
+        target="$export_dest/$sub"
+        if [[ -d "$target" ]]; then
+            echo "Cleaning previous export: $target"
+            rm -rf -- "$target"
+        fi
+    done
+}
 
 playbook_args=(
     "import_export.yml"
@@ -158,10 +187,12 @@ if [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]]; then
         echo "Run ./install_collections.sh to install collections for each AAP version."
         exit 1
     fi
+    clean_export_dest
     # Use only this path for this run (override; no export so caller's env is untouched).
     ANSIBLE_COLLECTIONS_PATH="$collections_dir" CONTROLLER_REQUEST_TIMEOUT="${CONTROLLER_REQUEST_TIMEOUT:-60}" ansible-playbook "${playbook_args[@]}"
 else
     mapfile -t navigator_vault_args < <(vault_navigator_args)
+    clean_export_dest
     ansible-navigator run "${playbook_args[@]}" "${navigator_vault_args[@]}" \
         --mode stdout \
         --pae false \
