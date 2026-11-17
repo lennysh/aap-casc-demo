@@ -135,7 +135,7 @@ This walk-through exports an existing AAP instance and imports it again. It's th
 ### Exporting
 
 ```bash
-./export.sh <workspace> <env> (-a | -t <tags>) [--playbook | --navigator] [--check] [-o <dir>]
+./export.sh <workspace> <env> (-a | -t <tags>) [--playbook | --navigator] [--check] [-o <dir>] [--clean]
 ```
 
 | Option | Meaning |
@@ -143,6 +143,7 @@ This walk-through exports an existing AAP instance and imports it again. It's th
 | `-a`, `--all` | Export everything supported for the environment's AAP version. |
 | `-t`, `--tags "<t1>,<t2>"` | Export only these object types (see [tags](#choosing-what-to-export-or-import-tags)). |
 | `-o`, `--export-path <dir>` | Write the export here instead of `orgs_vars/<workspace>/<env>/exports/<workspace>_<env>_export_<timestamp>/`. |
+| `--clean` | Before exporting, delete `flat_version/` and `filetree_version/` in the export directory. Use it when you re-export into the same `-o` directory; otherwise files for objects removed from AAP are left behind, and stale `flat_version/` files are carried into the new `filetree_version/`. Other files in the directory (such as `.git`) are kept. Skipped with `--check`. |
 | `--playbook` / `--navigator` | Run with `ansible-playbook` (default) or `ansible-navigator`. |
 | `-C`, `--check` | Ansible check mode. |
 
