@@ -25,6 +25,7 @@ This page is the reference for where configuration lives and what goes in each f
 | `flat_to_filetree.yml`, `filetree_to_flat.yml`, `convert_roles.yml` | Utility playbooks (see the [How-To guide](HOW_TO.md)). |
 | `library/`, `filter_plugins/`, `roles/*/action_plugins/` | Helper module, filters and plugins used by the roles. |
 | `scripts/` | Internal helpers used by the scripts. Not run directly. |
+| `tests/` | Automated tests for import (`python3 -m pytest tests -q`); no AAP needed. See `tests/README.md`. |
 | `docs/` | This documentation. |
 
 ## Workspace and environment folders

@@ -97,7 +97,7 @@ merge_by_key = _casc_lists.merge_by_key
 
 
 def safe_path_segment(value):
-    """Same as the role's safe_path_segment filter."""
+    """Same as the safe_path_segment filter in roles/filetree_to_flat/filter_plugins/."""
     if value is None:
         return "unnamed"
     result = str(value).strip()

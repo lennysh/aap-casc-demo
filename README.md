@@ -191,7 +191,7 @@ Each object type has a tag (for example `controller_projects`, `gateway_teams`, 
 Combine tags with commas: `-t "controller_projects,controller_job_templates"`. On AAP 2.5+, export also accepts the category tags `controller`, `gateway`, `eda` and `hub`. AAP 2.4 uses shorter tag names (for example `projects`). The full lists are in [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md#tags).
 
 > [!TIP]
-> When importing with tags, remember dependencies. A job template needs its project, inventory and credentials to exist already, so import those first (or include their tags too).
+> When importing with tags, remember dependencies. A job template needs its project, inventory and credentials to exist already, so import those first (or include their tags too, or name their files together with `-f`).
 
 With `-t`, import loads only the object types for those tags (for example `-t controller_job_templates` loads `controller_templates`), so work-in-progress files for other types don't break the run. See [Import only some object types](docs/HOW_TO.md#import-only-some-object-types).
 
@@ -309,13 +309,13 @@ Everything you run lives in the repository root. Internal helpers live in `scrip
 
 | Script | Purpose |
 |---|---|
-| `start_here.sh [<workspace> <env>]` | Setup wizard: create, repair or check an environment (version, layout, folders, connection test, vaults). `--help` lists options for unattended use. |
+| `start_here.sh [<workspace> <env>]` | Setup wizard: create, repair or check an environment (version, folders, connection test, vaults). `--help` lists options for unattended use. |
 | `export.sh` / `import.sh` | Export from / import to AAP. |
 | `vault-edit.sh <workspace> <env\|common>` | Create or edit a vault. |
 | `vault-view.sh <workspace> <env>` | Show a vault with secret lines hidden. |
 | `install_collections.sh [--git] [version ...]` | Install each AAP version's collections into `collections/<version>/`. |
 | `list_collections.sh <version>` | List the collections installed for a version. |
-| `autocomplete.sh` | Tab completion for workspace and env names (`source` it). |
+| `autocomplete.sh` | Tab completion for workspace and env names, and for `import.sh -f` paths (`source` it). |
 
 Utility playbooks for advanced use (`flat_to_filetree.yml`, `filetree_to_flat.yml`, `convert_roles.yml`) are covered in the [How-To guide](docs/HOW_TO.md).
 
@@ -360,6 +360,7 @@ Feedback and contributions are welcome.
 * **Feature requests, bugs, documentation:** open a [GitHub Issue](https://github.com/lennysh/aap-casc-demo/issues) and pick the matching template.
 * **Questions and chat:** join the [Matrix channel](https://matrix.to/#/#lennysh-aap-casc-demo:matrix.org).
 * **Code or doc changes:** open a pull request. The [pull request template](.github/PULL_REQUEST_TEMPLATE.md) walks you through the details.
+* **Tests:** changes to import should keep the test suite passing: `python3 -m pytest tests -q -n auto` (no AAP needed; see [tests/README.md](tests/README.md)).
 
 ## 🙏 Thank You
 
