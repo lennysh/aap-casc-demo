@@ -35,6 +35,20 @@
   tags:
     - always
 
+# Import: load (and duplicate-check) the configuration files before authenticating, so
+# problems in the files are reported before anything is sent to AAP.
+- name: "{{ __task_name }}"
+  vars:
+    __task_name: "AAP {{ casc_aap_version }} | Import | Load configuration files"
+  ansible.builtin.include_tasks: import_load.yml
+  args:
+    apply:
+      tags:
+        - always
+  when: (import_export_mode | trim | lower) == 'import'
+  tags:
+    - always
+
 - name: Block to handle Auth
   block:
     - name: "{{ __task_name }}"

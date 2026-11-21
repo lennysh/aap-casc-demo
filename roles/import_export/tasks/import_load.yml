@@ -1,0 +1,69 @@
+---
+# Load the configuration to import: every YAML file under common/ (unless import_common is
+# false) and <env>/imports/, in any folder structure (filetree <type>.d/ folders, flat files,
+# or a mix). Runs before authentication so problems are reported before touching AAP.
+#
+# casc_import_prepare (action_plugins/) checks for duplicate objects, then merges variables
+# defined in several files without templating them (lists appended, common/ first; dicts
+# combined, later files win per key; anything else keeps the last value) into a staging folder.
+# It also applies the cross-version aliases (import_export_var_aliases) and merges entries that
+# share identity fields (import_export_merge_keys). One include_vars loads the result, so values
+# stay lazily templated: a missing variable only matters for the object that uses it.
+# With tags (import.sh -t), only the object types those tags import are loaded; with files
+# (import.sh -f), only the objects defined in those files; -a loads all.
+- name: Check for duplicates and stage configuration files for AAP {{ casc_aap_version }}
+  casc_import_prepare:
+    paths: "{{ ([common_dir] if import_common | default(true) | bool else []) + [env_dir ~ '/imports'] }}"
+    display_root: "{{ env_dir | dirname }}"
+    var_aliases: "{{ import_export_var_aliases[__auth_mode] | default([]) }}"
+    identity_keys: "{{ import_export_identity_keys }}"
+    skip_duplicate_check: "{{ import_export_skip_duplicate_check }}"
+    allow_duplicates: "{{ import_export_allow_duplicates | bool }}"
+    merge_keys: "{{ import_export_merge_keys[__auth_mode] | default({}) }}"
+    # With tags, load only the object types the selected tags import (mapping read from the
+    # dispatch role), so unfinished files for other types don't break this run.
+    run_tags: "{{ ansible_run_tags }}"
+    # import.sh -f: take object definitions only from these files/folders.
+    only_paths: "{{ import_export_only_files | default([]) }}"
+    skip_tags: "{{ ansible_skip_tags }}"
+    dispatch_role: "{{ 'infra.controller_configuration.dispatch' if __auth_mode == 'controller' else 'infra.aap_configuration.dispatch' }}"
+  register: __import_prepare
+  tags:
+    - always
+
+- name: Show which object types are loaded for the selected tags and files
+  ansible.builtin.debug:
+    msg: "{{ (['Files: ' ~ (__import_prepare.selected_files | join(', '))] if __import_prepare.file_filtered else [])
+             + ['Loaded: ' ~ (__import_prepare.loaded_object_variables | join(', ') or 'none'),
+                'Skipped (not selected): ' ~ (__import_prepare.skipped_object_variables | join(', ') or 'none')] }}"
+  when: (__import_prepare.tag_filtered | default(false)) or (__import_prepare.file_filtered | default(false))
+  tags:
+    - always
+
+- name: Load configuration files for AAP {{ casc_aap_version }}
+  block:
+    - name: Load staged configuration files for AAP {{ casc_aap_version }}
+      ansible.builtin.include_vars:
+        dir: "{{ __import_prepare.stage_dir }}"
+      no_log: "{{ aap_configuration_secure_logging | bool }}"
+      tags:
+        - always
+
+    # Resolve every loaded object now, so a missing variable is reported (all of them at once)
+    # before anything is sent to AAP instead of failing halfway through the import.
+    - name: Preflight - check every loaded object can be resolved for AAP {{ casc_aap_version }}
+      casc_import_preflight:
+        variables: "{{ __import_prepare.object_variables }}"
+        identity_keys: "{{ import_export_identity_keys }}"
+      when: import_export_preflight | default(true) | bool
+      tags:
+        - always
+  always:
+    - name: Remove staging folder for AAP {{ casc_aap_version }}
+      ansible.builtin.file:
+        path: "{{ __import_prepare.stage_dir }}"
+        state: absent
+      check_mode: false
+      tags:
+        - always
+...

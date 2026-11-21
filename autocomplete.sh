@@ -35,6 +35,30 @@ _repo_scripts_autocomplete() {
         fi
         return 0
     fi
+
+    # Case 3: import.sh -f/--file <path>: complete paths inside the workspace folder
+    # (common/... and <env>/imports/...), which is what -f paths are relative to.
+    if [[ "$prev" == "-f" || "$prev" == "--file" ]] && [[ "${COMP_WORDS[0]}" == *import.sh ]]; then
+        local ws_dir="$orgs_vars_dir/${COMP_WORDS[1]}"
+        [[ -d "$ws_dir" ]] || return 0
+        local entry
+        local IFS=$'\n'
+        COMPREPLY=()
+        if [[ -z "$cur" ]]; then
+            COMPREPLY=("common/" "${COMP_WORDS[2]}/imports/")
+        else
+            for entry in $(cd "$ws_dir" && compgen -f -- "$cur"); do
+                if [[ -d "$ws_dir/$entry" ]]; then
+                    COMPREPLY+=("$entry/")
+                elif [[ "$entry" == *.yml || "$entry" == *.yaml ]]; then
+                    COMPREPLY+=("$entry")
+                fi
+            done
+        fi
+        # Keep typing after a folder; quote spaces in file names.
+        compopt -o nospace -o filenames 2>/dev/null
+        return 0
+    fi
 }
 
 # Automatically register this autocomplete logic for all .sh scripts in this folder

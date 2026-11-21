@@ -22,4 +22,12 @@
   tags:
     - always
   check_mode: false
+
+# Read the token from the registered result rather than the top-level
+# `controller_token` fact the module injects (INJECT_FACTS_AS_VARS is deprecated).
+- name: Set fact to store token dict
+  ansible.builtin.set_fact:
+    controller_token_dict: "{{ authtoken_res.ansible_facts.controller_token }}"
+  tags:
+    - always
 ...

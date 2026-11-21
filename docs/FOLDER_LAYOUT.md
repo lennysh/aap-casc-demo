@@ -21,9 +21,9 @@ This page is the reference for where configuration lives and what goes in each f
 | `script_vars/<version>/vars.env` | Per-AAP-version settings: valid tags, folders to create, Execution Environment image. |
 | `collections/<version>/` | Per-AAP-version collection requirements (`requirements.yml`, `requirements-git.yml`) and the installed collections. |
 | `import_export.yml` | The playbook behind `export.sh` and `import.sh`. |
-| `roles/` | `import_export` (the main role), `flat_to_filetree` and `filetree_to_flat` (layout converters). |
+| `roles/` | `import_export` (the main role), `flat_to_filetree` and `filetree_to_flat` (converters between the flat and filetree file styles). |
 | `flat_to_filetree.yml`, `filetree_to_flat.yml`, `convert_roles.yml` | Utility playbooks (see the [How-To guide](HOW_TO.md)). |
-| `library/`, `filter_plugins/` | Helper module and filters used by the roles. |
+| `library/`, `filter_plugins/`, `roles/*/action_plugins/` | Helper module, filters and plugins used by the roles. |
 | `scripts/` | Internal helpers used by the scripts. Not run directly. |
 | `docs/` | This documentation. |
 
@@ -35,49 +35,43 @@ orgs_vars/<workspace>/
 │   ├── vault.yml                       # shared secrets (encrypted)
 │   └── <type>.d/ ...                   # shared configuration
 └── <env>/
-    ├── vars.env                        # CASC_AAP_VERSION, FLATTEN_OUTPUT (written by start_here.sh)
+    ├── vars.env                        # CASC_AAP_VERSION (written by start_here.sh)
     ├── vars.yml                        # import/export options
     ├── vault.yml                       # connection details + secrets (encrypted)
     ├── imports/
     │   └── <type>.d/ ...               # environment-specific configuration
     └── exports/
         └── <workspace>_<env>_export_<timestamp>/
-            ├── filetree_version/       # copy from here (default layout)
-            └── flat_version/           # or from here (flatten_output: true)
+            ├── filetree_version/       # one file per object (recommended to copy from)
+            └── flat_version/           # one file per object type
 ```
 
-`start_here.sh` creates every `<type>.d/` folder the environment's AAP version can import, in both `common/` and `<env>/imports/`. Empty folders are fine. Delete the ones you'll never use if you prefer. Running `start_here.sh` again on an existing environment only adds what's missing.
+`start_here.sh` creates every `<type>.d/` folder the environment's AAP version can import, in both `common/` and `<env>/imports/`, as a guide. They're optional: import reads any folder structure. Empty folders are fine. Delete the ones you'll never use if you prefer. Running `start_here.sh` again on an existing environment only adds what's missing.
 
 ## How import finds your files
 
-**Filetree layout (`flatten_output: false`, the default)**
-
-* Each object type is read from its folder (see the [reference table](#object-type-reference)) in both `common/` and `<env>/imports/`, including any subfolders.
-* On AAP 2.5+, a file is only loaded if it contains that type's top-level key. For example, files in `controller_projects.d/` must contain `controller_projects:`.
-* `controller_settings` is read from `<env>/imports/controller_settings.d/` only, because controller settings are usually environment-specific.
-
-**Flat layout (`flatten_output: true`)**
-
-* Every `*.yml` / `*.yaml` file under `common/` and `<env>/imports/` is loaded, at any depth, regardless of folder name. Files whose names start with `ignore_` are skipped.
-* If the same variable appears in several files, lists are combined, dictionaries are merged (later files win per key), and for other values the last file wins. `common/` is read before `imports/`.
-
-**Both layouts**
-
+* Every `*.yml` / `*.yaml` file under `common/` (unless `import_common: false`) and `<env>/imports/` is loaded, at any depth, whatever the folder or file name: filetree folders, flat files, or a mix. Files whose names start with `ignore_` are skipped, and so are folders whose names start with `ignore_`, with everything in them (handy for parking old or unfinished configuration, for example `ignore_controller_job_templates.d/`).
+* **Tags filter what's loaded.** With `-t`, only the object variables whose type matches a selected tag are kept (for example `-t controller_job_templates` keeps `controller_templates`; `-t gateway_organizations` keeps `aap_organizations` and its older names `controller_organizations` / `gateway_organizations`). The mapping comes from the collection's dispatch role, so it matches exactly what runs. Other object variables are dropped before the duplicate check and merge, so broken or unfinished definitions of other types (undefined variables, duplicates) don't stop the import. **Helper variables** (top-level keys that aren't object types, such as `authentik:` or `email_template_01:` used through Jinja) are always loaded. A file that can't be parsed is skipped with a warning only when tags are used and all its top-level keys are unselected object types; otherwise it's an error. With `-a`, everything is loaded and checked. The run prints which object variables were loaded and which were skipped.
+* **`-f` limits import to files.** With `-f <path>` (repeatable; a file or a folder), object variables are loaded only from the named files; helper variables and vault files still load from every file. Only the roles for the loaded object types run, and `-t` can narrow further. A path import wouldn't read (outside `common/` and `<env>/imports/`, `ignore_`, not `.yml` / `.yaml`, under `common/` with `import_common: false`) is an error. A file that wasn't named and can't be parsed is skipped with a warning when all its top-level keys are object variables. See [Import a single file (or folder)](HOW_TO.md#import-a-single-file-or-folder).
+* The **top-level key** decides what a file contains (see the [reference table](#object-type-reference)), so a file in the "wrong" folder still imports correctly.
+* `common/` is read first, then `<env>/imports/`. If the same variable appears in several files, lists are combined, dictionaries (such as `gateway_settings` or `controller_settings`) are merged with later files winning per key, and for other values the last file wins. So a setting in `<env>/imports/` overrides the same setting in `common/`.
+* **Duplicate check:** before connecting to AAP, import checks that no loaded object (all of them with `-a`; with `-t` or `-f`, only what's loaded) is defined twice with different values (same type and identity, such as name + organization for projects, `username` for users, name + inventory for hosts). If one is, it stops and lists every location. Fix it, or use `./import.sh ... --allow-duplicates` to import anyway (each copy is sent to AAP in order, so the last one wins; for organizations, teams, users and applications the first one wins). Copies with no conflicting values are imported with a warning. The identity fields are set by `import_export_identity_keys` in `roles/import_export/defaults/main.yml`.
+* **Preflight check:** next, import resolves every loaded object (with `-t` or `-f`, only what's loaded) (Jinja variables and filters). If any can't be resolved, it stops before connecting to AAP and lists each one (`<variable> [<object>]: <error>`), so a missing vault secret can't stop an import halfway through. `--skip-preflight` turns it off.
 * Organizations, teams, users and applications may also be written with the AAP 2.4 variable names (`controller_organizations`, `controller_teams`, `controller_user_accounts`, `controller_applications`) and still import into AAP 2.5+, and vice versa. Duplicates are merged. See [Migrating Between AAP Versions](MIGRATING_BETWEEN_AAP_VERSIONS.md).
 
 ## File format rules
 
 * Files are YAML. Start with `---` (recommended).
 * The **top-level key** decides the object type, not the file name. Name files however you like; export names them after the object (`My Project.yml`).
-* A file can hold **one or many** objects (it's a list), and an object type can be spread over **many files**. They're all combined.
-* Values can use **Jinja variables**, such as `"{{ vault_github_token }}"` or `"demolab-{{ env }}"`. Variables are resolved from your vaults, from `vars.yml`, or from other variable files (flat layout). `env` and `orgs` hold the current environment and organization names.
+* A file can hold **one or many** objects (it's a list), and an object type can be spread over **many files**. They're all combined, but each object should be defined only once (see the duplicate check above).
+* Values can use **Jinja variables**, such as `"{{ vault_github_token }}"` or `"demolab-{{ env }}"`. Variables are resolved from your vaults, from `vars.yml`, or from any other file being imported. `env` and `orgs` hold the current environment and organization names.
 * Objects are matched by **name** (plus organization where names are only unique per organization). Renaming an object in a file creates a new object. Use `new_name:` to rename an existing one.
 * `state: absent` on an object deletes it on import.
 * The available fields for each object type are the fields of the matching role in the collection. See the role docs in [infra.aap_configuration](https://github.com/redhat-cop/infra.aap_configuration/tree/devel/roles) (AAP 2.5+) or [infra.controller_configuration](https://github.com/redhat-cop/infra.controller_configuration/tree/devel/roles) (AAP 2.4). The easiest way to learn the fields is to export an existing object.
 
 ## Object type reference
 
-Folder and key names are the same for every AAP version. The *Versions* column shows where each type can be imported.
+Folder and key names are the same for every AAP version. [Object Examples](OBJECT_EXAMPLES.md) has a sample file for each type. The folder is where export puts each type (a good place to keep it); the top-level key is what import goes by. The *Versions* column shows where each type can be imported.
 
 ### Shared platform objects
 
@@ -155,6 +149,8 @@ Folder and key names are the same for every AAP version. The *Versions* column s
 | EE images | `hub_ee_images.d` | `hub_ee_images` |
 
 ## Examples
+
+A few common examples follow. For an example of **every** object type, see [Object Examples](OBJECT_EXAMPLES.md).
 
 **Organization and team** (`common/aap_organizations.d/Network Team.yml`, `common/aap_teams.d/netops.yml`)
 

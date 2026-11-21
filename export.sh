@@ -134,6 +134,8 @@ playbook_args=(
     "-e" "export_path=$export_dest"
     "-e" "@$orgs_vars_dir/$org/$env/vault.yml"
     "-e" "@$orgs_vars_dir/$org/$env/vars.yml"
+    # filetree_create option: write the flat_version/ export (filetree_version/ is built from it).
+    # Passed last so an old flatten_output in vars.yml can't override it.
     "-e" "flatten_output=true"
 )
 

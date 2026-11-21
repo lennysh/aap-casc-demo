@@ -11,8 +11,10 @@ Requirements
 ------------
 
 * ansible-core 2.16 or later.
-* The `lookup('pipe', 'cat ...')` feature must be available on the Ansible controller, as this role uses it to read files without triggering Jinja2 templating.
-* Source YAML files must be parsable. The role automatically strips `!unsafe` tags to handle common export formats.
+* The Python `ruamel.yaml` library on the Ansible controller (included in the CaC execution environments) for pretty-printing the output. Without it the files are still written, just not re-formatted, and a warning is shown.
+* Source YAML files must be parsable. Files are read without Jinja2 templating, and `!unsafe` tags are stripped to handle common export formats.
+
+All the work is done in a single controller-side task (`action_plugins/flat_to_filetree_split.py`): read, alias, merge, split, write, and pretty-print. Converting a few hundred objects takes a second or two.
 
 Role Variables
 --------------
@@ -49,7 +51,7 @@ flat_to_filetree_copy_only_map:
 
 * `flat_to_filetree_merge_keys`
     * **Optional:** After aliasing, merges list entries that share the given identity fields (first entry wins; later ones only add missing fields), e.g. `aap_teams: [name, organization]`. Removes duplicates when several exporters write the same object.
-    * Uses the `rename_keys` / `merge_by_key` filters from the repo's `filter_plugins/casc_lists.py`, so run this role from a playbook in the repo root (as `import_export.yml` and `flat_to_filetree.yml` are).
+    * Uses the `rename_keys` / `merge_by_key` filters from the repo's `filter_plugins/casc_lists.py`, so keep this role inside the repo (it loads that file relative to its own location).
 
 * `flat_to_filetree_var_to_folder_map`
     * **Required:** A dictionary mapping the top-level YAML variable (e.g., `controller_credentials`) to the name of the root folder you want to create for it.

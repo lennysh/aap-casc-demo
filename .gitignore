@@ -18,3 +18,4 @@ orgs_vars/**
 !orgs_vars/.gitkeep
 
 __pycache__/
+.pytest_cache/

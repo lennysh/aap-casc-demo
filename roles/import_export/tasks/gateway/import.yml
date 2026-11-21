@@ -6,29 +6,6 @@
   tags:
     - always
 
-- name: Import common vault vars
-  when: import_common | default(true) | bool
-  ansible.builtin.include_vars:
-    file: "{{ playbook_dir }}/orgs_vars/{{ orgs }}/common/vault.yml"
-  tags:
-    - always
-
-- name: Include Import Tasks for AAP {{ casc_aap_version }}
-  vars:
-    __import_type: "{{ 'flat' if flatten_output | default(false) | bool else 'filetree' }}"
-  ansible.builtin.include_tasks: "import_{{ __import_type }}.yml"
-  tags:
-    - always
-
-- name: Apply cross-version variable aliases for AAP {{ casc_aap_version }}
-  ansible.builtin.include_tasks: "{{ role_path }}/tasks/import_var_aliases.yml"
-  args:
-    apply:
-      tags:
-        - always
-  tags:
-    - always
-
 - name: Dispatch for AAP {{ casc_aap_version }}
   ansible.builtin.import_role:
     name: infra.aap_configuration.dispatch

@@ -16,6 +16,7 @@ Step-by-step recipes for common tasks. The examples use a workspace called `MyCo
 * [Delete an object](#delete-an-object)
 * [Check for drift](#check-for-drift)
 * [Import only some object types](#import-only-some-object-types)
+* [Import a single file (or folder)](#import-a-single-file-or-folder)
 
 **Sharing and secrets**
 
@@ -28,7 +29,7 @@ Step-by-step recipes for common tasks. The examples use a workspace called `MyCo
 * [Run without prompts (CI/CD)](#run-without-prompts-cicd)
 * [Use an Execution Environment](#use-an-execution-environment)
 * [Update or change collection versions](#update-or-change-collection-versions)
-* [Convert between flat and filetree layouts](#convert-between-flat-and-filetree-layouts)
+* [Convert between flat and filetree files](#convert-between-flat-and-filetree-files)
 * [Convert controller roles to gateway role assignments](#convert-controller-roles-to-gateway-role-assignments)
 * [Move to a different AAP version](#move-to-a-different-aap-version)
 
@@ -42,7 +43,7 @@ Step-by-step recipes for common tasks. The examples use a workspace called `MyCo
     ./start_here.sh MyCompany prod
     ```
 
-    Pick the AAP version and the *Filetree* layout, enter the AAP URL and credentials (answer **n** to certificate validation if AAP uses a self-signed certificate), and choose a vault password. The wizard tests the connection before saving anything.
+    Pick the AAP version, enter the AAP URL and credentials (answer **n** to certificate validation if AAP uses a self-signed certificate), and choose a vault password. The wizard tests the connection before saving anything.
 
 2. Export:
 
@@ -101,9 +102,9 @@ A typical change workflow: create a branch, edit files, run `./import.sh ... --c
 
 The new environment shares `orgs_vars/MyCompany/common/` with the existing ones, and uses the workspace's vault password: the wizard reads it from `.vault_pass/MyCompany.txt` (or a shared password file) if one fits, or asks for it and checks it against the existing vaults.
 
-The wizard suggests the AAP version, layout, certificate setting and username of the workspace's most recently set up environment, and checks that the vault password you enter opens the workspace's existing vaults.
+The wizard suggests the AAP version, certificate setting and username of the workspace's most recently set up environment, and checks that the vault password you enter opens the workspace's existing vaults.
 
-To check an existing environment, run `./start_here.sh MyCompany test` again. It shows the AAP version, layout, export scope, vault status and last export, adds anything that's missing, and offers a menu to:
+To check an existing environment, run `./start_here.sh MyCompany test` again. It shows the AAP version, export scope, vault status and last export, adds anything that's missing, and offers a menu to:
 
 * **test the connection** with the saved details;
 * **update the connection details** (URL, certificate check, login). Other secrets in the vault are kept;
@@ -195,6 +196,45 @@ Use `-t` with one or more tags:
 Run `./import.sh MyCompany dev` (no `-a` / `-t`) to list every valid tag for that environment's AAP version.
 
 Import applies object types in dependency order (organizations, then credentials, projects, inventories, job templates, and so on), but only for the tags you ask for. If you import just `controller_job_templates`, its projects, inventories and credentials must already exist in AAP.
+
+`-t` is also handy while you're working on something:
+
+* **Import just what you're working on.** With `-t`, import loads only the object types for those tags. Files for other types are still found but their objects are skipped, so a half-finished credential or a leftover duplicate project won't break a job template import. Helper variables (non-object keys you reference with Jinja) are always loaded. The run lists which object variables were loaded and which were skipped.
+* **Validate everything with `-a`.** A full import (or `-a --check`) loads every file, checks for duplicates across all of them, and needs every variable to resolve. Run it before merging or promoting changes.
+* **Exclude a file or folder completely** by renaming it to start with `ignore_` (for example `ignore_new_creds.yml`, or `ignore_controller_job_templates.d/` to park a whole folder of old definitions). It's skipped even with `-a`. Other renames such as `_old` or `.bak` folders don't work: import reads every YAML file it finds.
+
+> [!TIP]
+> AAP 2.4 uses short tags without the `controller_` prefix, for example `-t "projects,job_templates"`.
+
+## Import a single file (or folder)
+
+Use `-f` with a path relative to the workspace folder (`orgs_vars/<workspace>/`), relative to the current directory, or absolute. Repeat `-f` for more paths, and quote names with spaces or commas:
+
+```bash
+# One file
+./import.sh MyCompany dev -f common/controller_credential_types.d/ip_inventory.yml
+
+# A folder: every YAML file import would read inside it
+./import.sh MyCompany dev -f dev/imports/controller_projects.d
+
+# A job template plus its project (tab-completed from the repo root works too)
+./import.sh MyCompany dev -f dev/imports/controller_job_templates.d/deploy_web.yml \
+                          -f orgs_vars/MyCompany/dev/imports/controller_projects.d/web.yml
+```
+
+* Only object definitions (`controller_*`, `aap_*`, `gateway_*`, `eda_*`, `hub_*` variables) from the named files are loaded, and only the roles for those object types run. Helper variables and vault-encrypted files are still loaded from every file, so `{{ helper.x }}` and vault secrets resolve.
+* No `-a` / `-t` is needed. Add `-t` to narrow further (both filters apply).
+* The path must be one import reads: under `common/` (unless `import_common: false`) or `<env>/imports/`, a `.yml` / `.yaml` file, not `ignore_` or inside an `ignore_` folder. Otherwise the run stops and says why (see [Troubleshooting](TROUBLESHOOTING.md#import-problems)).
+* The run prints the selected files and which object variables were loaded and skipped.
+
+> [!NOTE]
+> The duplicate and preflight checks cover only what's loaded. If the same object is also defined in another file, the named file's version is imported without a duplicate error. The next `-a` run still catches the duplicate.
+
+**Which to use:**
+
+* `-f`: you changed one or a few files and want to apply just those.
+* `-t`: you want every object of some types, wherever they're defined.
+* `-a`: apply and validate everything (duplicates across all files, every variable resolves). Run it before merging or promoting changes.
 
 ## Promote configuration from dev to prod
 
@@ -299,11 +339,11 @@ Environments can be created unattended too (for example in a bootstrap pipeline)
 ```bash
 export CASC_VAULT_PASSWORD=...          # encrypts the new vaults
 export AAP_PASSWORD=...                 # or AAP_TOKEN=... instead of --username
-./start_here.sh MyCompany prod --version 2.6 --filetree \
+./start_here.sh MyCompany prod --version 2.6 \
   --hostname https://aap.example.com --username admin --org-filter 'Network Team' --yes
 ```
 
-`--yes` never asks questions and fails if something required is missing. When the workspace already has an environment, its AAP version, layout, certificate setting and username are used for anything you don't pass. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
+`--yes` never asks questions and fails if something required is missing. When the workspace already has an environment, its AAP version, certificate setting and username are used for anything you don't pass. The connection test still runs (add `--skip-test` to skip it), and a failed test stops the script without saving the vault. `./start_here.sh --help` lists every option.
 
 * `CASC_VAULT_PASSWORD` supplies the vault password without a prompt. If your workspaces have different passwords, set it per job (for example from a per-workspace CI secret). Alternatively, write the password to `.vault_pass/<workspace>.txt` (mode 600) at the start of the job.
 * Without a terminal and without a password source, the scripts stop with an explanation instead of hanging on a prompt.
@@ -355,9 +395,9 @@ To try the latest upstream code, install from Git sources instead (`collections/
 
 Edit the requirements file to pin specific versions. Installs for one version never affect another.
 
-## Convert between flat and filetree layouts
+## Convert between flat and filetree files
 
-Export already writes both layouts. To convert files you've edited yourself:
+Import reads both styles (and any mix), so converting is never required; it's only for tidying up. Export already writes both. To convert files you've edited yourself:
 
 ```bash
 # Flat files -> one file per object
@@ -371,7 +411,7 @@ ansible-playbook filetree_to_flat.yml \
   -e filetree_to_flat_output_path=orgs_vars/MyCompany/prod/imports_flat
 ```
 
-Write to a new folder, review the result, then swap it in, and set `flatten_output` in `vars.yml` to match. Both converters keep `{{ variables }}` as they are. `flat_to_filetree` also writes organizations, teams, users and applications under the standard `aap_*` names, whatever version they came from.
+Write to a new folder, review the result, then swap it in. Both converters keep `{{ variables }}` as they are (and `flat_to_filetree` keeps `!unsafe` and `!vault` tags). `flat_to_filetree` also writes organizations, teams, users and applications under the standard `aap_*` names, whatever version they came from.
 
 ## Convert controller roles to gateway role assignments
 

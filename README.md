@@ -95,7 +95,6 @@ This walk-through exports an existing AAP instance and imports it again. It's th
 
     The setup wizard asks:
     * **the AAP version** of that instance;
-    * **the import layout:** choose *Filetree* unless you have a reason not to (see [Filetree or flat?](docs/CONCEPTS.md#filetree-and-flat-layouts));
     * **a vault password**, which encrypts the connection details and other secrets. All environments in a workspace share one password (the wizard checks it against the workspace's existing vaults); different workspaces can use different passwords. It can save the password to `.vault_pass/<workspace>.txt` so you aren't asked every time;
     * **how to reach AAP:** URL, certificate validation, and a username and password (or an existing token). It then **tests the connection** and warns you if the server's version doesn't match what you chose;
     * **which AAP organizations to export:** all of them, or one picked from a list fetched from AAP.
@@ -157,13 +156,25 @@ To export only one AAP organization, set `organization_filter` in the environmen
 ### Importing
 
 ```bash
-./import.sh <workspace> <env> (-a | -t <tags>) [--playbook | --navigator] [--check]
+./import.sh <workspace> <env> (-a | -t <tags> | -f <path>...) [--playbook | --navigator] [--check] [--allow-duplicates] [--skip-preflight]
 ```
 
-Import reads YAML from two places and applies it to the environment's AAP instance:
+Import reads the YAML files, in any folder structure, from two places and applies them to the environment's AAP instance:
 
 * `orgs_vars/<workspace>/common/`: configuration shared by every environment in the workspace (skip it with `import_common: false`).
 * `orgs_vars/<workspace>/<env>/imports/`: configuration for this environment only.
+
+With `-a`, every object type in those files is loaded. With `-t`, only the object types for the selected tags are loaded; other object types are skipped, so unfinished files for them don't get in the way. Helper variables (top-level keys that aren't object types, used through Jinja) are always loaded. The run lists which object variables were loaded and which were skipped.
+
+With `-f <path>` (repeatable), only the objects defined in the named files are loaded, for example `./import.sh MyCompany dev -f dev/imports/controller_job_templates.d/deploy_web.yml`:
+
+* A path can be a file or a folder (every YAML file import would read inside it), relative to `orgs_vars/<workspace>/`, to the current directory, or absolute. Tab completion completes paths inside the workspace.
+* `-f` replaces `-a` / `-t`; add `-t` to narrow it further. Helper variables and vault files are still loaded from every file, so Jinja references and secrets resolve.
+* The duplicate and preflight checks cover only what's loaded. See [Import a single file (or folder)](docs/HOW_TO.md#import-a-single-file-or-folder).
+
+Before connecting to AAP, import checks that no loaded object is defined more than once with different values (for example the same project in both `common/` and `imports/`) and stops with a list of the locations if one is. `--allow-duplicates` imports anyway; the last copy wins. See [How files are combined](docs/CONCEPTS.md#how-files-are-combined).
+
+It then runs a **preflight** check: every loaded object is resolved (Jinja variables, filters) and, if any can't be, import stops with the full list (for example every vault secret you haven't defined yet) before anything is sent to AAP, so an import never fails halfway through over a missing variable. `--skip-preflight` turns the check off.
 
 Objects are matched by name (and organization, where relevant). Existing objects are updated and missing ones are created. Objects that exist in AAP but not in your files are left alone. To remove an object, set `state: absent` on it (see [How-To](docs/HOW_TO.md#delete-an-object)).
 
@@ -180,6 +191,8 @@ Combine tags with commas: `-t "controller_projects,controller_job_templates"`. O
 
 > [!TIP]
 > When importing with tags, remember dependencies. A job template needs its project, inventory and credentials to exist already, so import those first (or include their tags too).
+
+With `-t`, import loads only the object types for those tags (for example `-t controller_job_templates` loads `controller_templates`), so work-in-progress files for other types don't break the run. See [Import only some object types](docs/HOW_TO.md#import-only-some-object-types).
 
 ### Dry runs
 
@@ -206,7 +219,7 @@ orgs_vars/
         └── ...
 ```
 
-Each `<type>.d/` folder holds YAML files for one object type. A file can contain one object or many, and file names are up to you. What matters is the top-level key inside the file (for example `controller_projects:`). The [Folder Layout and Object Reference](docs/FOLDER_LAYOUT.md) lists every folder, its key, and examples.
+Each `<type>.d/` folder holds YAML files for one object type. A file can contain one object or many, and file and folder names are up to you (import reads every YAML file it finds, so a few larger "flat" files work too). What matters is the top-level key inside the file (for example `controller_projects:`). The [Folder Layout and Object Reference](docs/FOLDER_LAYOUT.md) lists every folder, its key, and examples, and [Object Examples](docs/OBJECT_EXAMPLES.md) has an example of every object type.
 
 ## ⚙ Configuration Reference
 
@@ -217,12 +230,11 @@ Each environment has a `vars.yml` (created from `templates/vars.yml`):
 | Option | Default | Meaning |
 |---|---|---|
 | `organization_filter` | unset | Export only this AAP organization (for example `'Default'`). Unset exports everything your user can see. |
-| `flatten_output` | `false` | Import layout. `false`: read the `<type>.d/` folder layout. `true`: read every YAML file under `imports/` (and `common/`) recursively, wherever it is; lists defined in several files are combined. Export always writes both layouts. |
 | `secrets_as_variables` | `true` | Export secrets as `{{ <prefix>_... }}` placeholders instead of AAP's `$encrypted$` marker. |
 | `secrets_as_variables_prefix` | `"vault"` | Prefix for those placeholder variable names. |
 | `import_common` | `true` | Also import `orgs_vars/<workspace>/common/`. Set to `false` to import only the environment's `imports/` folder. |
 
-The environment's `vars.env` holds `CASC_AAP_VERSION` (the AAP version), written by `start_here.sh`. It also records `FLATTEN_OUTPUT`, the layout chosen at setup; after setup, `flatten_output` in `vars.yml` is what counts.
+The environment's `vars.env` holds `CASC_AAP_VERSION` (the AAP version), written by `start_here.sh`.
 
 ### Vault files
 
@@ -319,6 +331,7 @@ source /path/to/aap-casc-demo/autocomplete.sh
 | [Concepts and Glossary](docs/CONCEPTS.md) | Configuration as code basics, the AAP components, and every term this project uses. |
 | [How-To Guide](docs/HOW_TO.md) | Step-by-step recipes: first export, Git workflow, promoting dev to prod, adding, changing and deleting objects, secrets, CI, and more. |
 | [Folder Layout and Object Reference](docs/FOLDER_LAYOUT.md) | Every folder and YAML key, file format rules, and examples. |
+| [Object Examples](docs/OBJECT_EXAMPLES.md) | A copy-and-edit example of every object type, for controller, gateway, EDA and hub. |
 | [Migrating Between AAP Versions](docs/MIGRATING_BETWEEN_AAP_VERSIONS.md) | Moving a configuration from 2.4 to 2.5+ (or between any versions), and what needs manual work. |
 | [Versions and Collections](docs/VERSIONS_AND_COLLECTIONS.md) | Collections per AAP version, ansible-core requirements, Execution Environments, and tag lists. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common errors and how to fix them. |

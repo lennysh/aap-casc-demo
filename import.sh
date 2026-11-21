@@ -12,10 +12,17 @@ script_vars_dir="$parent_dir/script_vars"
 usage() {
     local org_context=$1
     local env_context=$2
-    echo "Usage: $0 <workspace> <env> [--playbook|--navigator] [--check|-C] [-a|--all] [-t|--tags <tags>]"
+    echo "Usage: $0 <workspace> <env> (-a|--all | -t|--tags <tags> | -f|--file <path>...) [--playbook|--navigator] [--check|-C] [--allow-duplicates] [--skip-preflight]"
+    echo "  -a, --all     Import everything."
+    echo "  -t, --tags    Import only these object types (comma-separated tags, listed below)."
+    echo "  -f, --file    Import only the objects defined in this file or folder (repeatable). Relative to"
+    echo "                the workspace (e.g. common/controller_projects.d/x.yml) or the current directory."
+    echo "                Can be combined with -t."
     echo "  --playbook    Use ansible-playbook with versioned collections (default). Overrides CASC_USE_PLAYBOOK."
     echo "  --navigator   Use ansible-navigator with the EE from script_vars. Overrides CASC_USE_PLAYBOOK."
     echo "  --check, -C   Run in Ansible check mode (dry-run; no changes)."
+    echo "  --allow-duplicates  Import even if an object is defined more than once with different values."
+    echo "  --skip-preflight    Don't check that every object resolves (all variables defined) before connecting to AAP."
     echo "  Default: CASC_USE_PLAYBOOK env (unset/1/true/yes = playbook; anything else = navigator)."
     echo ""
 
@@ -78,23 +85,77 @@ case "${CASC_USE_PLAYBOOK:-1}" in
     *)                   USE_ANSIBLE_PLAYBOOK=false ;;
 esac
 CHECK_MODE=false
+ALLOW_DUPLICATES=false
+SKIP_PREFLIGHT=false
+ONLY_FILES=()
+invocation_dir=$PWD
 filtered_args=()
-for arg in "$@"; do
-    if [[ "$arg" == "--playbook" ]]; then
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+    arg=${args[i]}
+    if [[ "$arg" == "-f" || "$arg" == "--file" ]]; then
+        if (( i + 1 >= ${#args[@]} )) || [[ -z "${args[i+1]}" ]]; then
+            echo "Error: $arg requires a file or folder path."
+            usage
+        fi
+        i=$((i + 1))
+        ONLY_FILES+=("${args[i]}")
+    elif [[ "$arg" == --file=* ]]; then
+        ONLY_FILES+=("${arg#--file=}")
+    elif [[ "$arg" == "--playbook" ]]; then
         USE_ANSIBLE_PLAYBOOK=true
     elif [[ "$arg" == "--navigator" ]]; then
         USE_ANSIBLE_PLAYBOOK=false
     elif [[ "$arg" == "--check" ]] || [[ "$arg" == "-C" ]]; then
         CHECK_MODE=true
+    elif [[ "$arg" == "--allow-duplicates" ]]; then
+        ALLOW_DUPLICATES=true
+    elif [[ "$arg" == "--skip-preflight" ]]; then
+        SKIP_PREFLIGHT=true
     else
         filtered_args+=("$arg")
     fi
 done
 
+# -f on its own needs neither -a nor -t (the file list is the filter).
+if [[ ${#ONLY_FILES[@]} -gt 0 ]]; then
+    has_scope=false
+    for arg in "${filtered_args[@]:2}"; do
+        [[ "$arg" == "-a" || "$arg" == "--all" || "$arg" == "-t" || "$arg" == "--tags" ]] && has_scope=true
+    done
+    [[ "$has_scope" == "true" ]] || filtered_args+=("-a")
+fi
+
 # --- Initialize and Validate ---
 # Pass "import" to build the correct yq keys, and pass script arguments (without --playbook).
 # scripts/common_functions.sh will parse $env and load the $CASC_AAP_VERSION from it.
 initialize_and_validate "import" "${filtered_args[@]}"
+
+# --- Resolve -f paths: absolute, relative to the current directory, or relative to the workspace ---
+only_files_json=""
+if [[ ${#ONLY_FILES[@]} -gt 0 ]]; then
+    for path in "${ONLY_FILES[@]}"; do
+        if [[ "$path" == /* ]]; then
+            candidate=$path
+        elif [[ -e "$invocation_dir/$path" ]]; then
+            candidate="$invocation_dir/$path"
+        else
+            candidate="$orgs_vars_dir/$org/$path"
+        fi
+        if [[ ! -e "$candidate" ]]; then
+            echo "Error: -f '$path' not found (looked in $invocation_dir/ and $orgs_vars_dir/$org/)."
+            exit 1
+        fi
+        if [[ -d "$candidate" ]]; then
+            candidate=$(cd "$candidate" && pwd)
+        else
+            candidate="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
+        fi
+        escaped=${candidate//\\/\\\\}
+        escaped=${escaped//\"/\\\"}
+        only_files_json+="${only_files_json:+, }\"$escaped\""
+    done
+fi
 
 # --- Vault password (prompt if no vault password file is configured/present) ---
 ensure_vault_password "$orgs_vars_dir/$org/$env/vault.yml" "$orgs_vars_dir/$org/common/vault.yml"
@@ -119,6 +180,18 @@ fi
 
 if [[ "$CHECK_MODE" == "true" ]]; then
     playbook_args+=("--check")
+fi
+
+if [[ "$ALLOW_DUPLICATES" == "true" ]]; then
+    playbook_args+=("-e" "import_export_allow_duplicates=true")
+fi
+
+if [[ -n "$only_files_json" ]]; then
+    playbook_args+=("-e" "{\"import_export_only_files\": [$only_files_json]}")
+fi
+
+if [[ "$SKIP_PREFLIGHT" == "true" ]]; then
+    playbook_args+=("-e" "import_export_preflight=false")
 fi
 
 echo "Running playbook for AAP version: $CASC_AAP_VERSION ($( [[ "$USE_ANSIBLE_PLAYBOOK" == "true" ]] && echo 'ansible-playbook' || echo 'ansible-navigator/EE' ))$( [[ "$CHECK_MODE" == "true" ]] && echo ', check mode' )"
