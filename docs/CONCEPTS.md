@@ -7,7 +7,7 @@ This page explains the ideas behind configuration as code and defines every term
 * [Workspace and environment](#workspace-and-environment)
 * [Common vs. imports](#common-vs-imports)
 * [Export and import](#export-and-import)
-* [Filetree and flat layouts](#filetree-and-flat-layouts)
+* [Organizing your files](#organizing-your-files)
 * [Glossary](#glossary)
 
 ---
@@ -100,13 +100,15 @@ Export never touches your `imports/` or `common/` folders. You decide what to co
 
 Import **creates and updates**. It doesn't delete objects just because they're missing from your files. To delete something, mark it `state: absent` (see [How-To: delete an object](HOW_TO.md#delete-an-object)).
 
-## Filetree and flat layouts
+## Organizing your files
 
-Your configuration files can be organized in one of two ways. Each environment uses one of them for **import**, set by `flatten_output` in its `vars.yml` (the setup wizard asks). **Export always writes both**, so you can switch at any time.
+Import reads **every `*.yml` / `*.yaml` file** under `common/` and `<env>/imports/`, at any depth, whatever the folder and file names. What matters is the **top-level key** in each file (`controller_projects:`, `aap_teams:`, and so on; see the [Object Reference](FOLDER_LAYOUT.md#object-type-reference)). So you can organize files however suits your team, and mix styles freely. Files and folders whose names start with `ignore_` are skipped (a folder with everything in it). With `-t`, only the object types for the selected tags are loaded from those files (helper variables are always loaded); with `-f <path>`, only the objects in the named files or folders are (helper variables and vault files still load from every file); with `-a`, everything is.
 
-### Filetree (default, recommended)
+Export writes the same configuration in two styles, so you can copy whichever you prefer:
 
-One folder per object type, usually one file per object. The folder names and the key inside each file must match the [Object Reference](FOLDER_LAYOUT.md#object-type-reference).
+### Filetree (recommended)
+
+One folder per object type, usually one file per object. This is how export's **`filetree_version/`** is organized.
 
 ```text
 imports/
@@ -119,13 +121,11 @@ imports/
     └── netops.yml                   # aap_teams: [ ... ]
 ```
 
-* Copy from an export's **`filetree_version/`**.
-* Files may sit in subfolders inside a `<type>.d/` folder (for example `controller_roles.d/team_roles.d/`), and a file may hold several objects of its type.
-* A file outside the matching folder, or with the wrong top-level key, is ignored.
+One object per file keeps Git diffs small and merge conflicts rare, and makes things easy to find. The folder names are only a convention: a file is imported based on its key, not its folder.
 
-### Flat (`flatten_output: true`)
+### Flat
 
-Folder and file names don't matter. Every `*.yml` / `*.yaml` file under `imports/` (and `common/`) is loaded, at any depth, and a single file can define several object types.
+A few larger files, each holding one or more object types. This is how export's **`flat_version/`** is organized (one file per object type).
 
 ```text
 imports/
@@ -134,41 +134,16 @@ imports/
     └── everything.yml               # controller_templates: [ ... ] and aap_teams: [ ... ]
 ```
 
-* Copy from an export's **`flat_version/`** (one file per object type), or write your own files.
-* If several files define the same variable, the lists are combined. `common/` is read first, then `imports/`.
-* Files whose names start with `ignore_` are skipped.
+Handy for small or hand-written configurations and quick experiments.
 
-### Which should I use?
+### How files are combined
 
-| | Filetree | Flat |
-|---|---|---|
-| Best for | Most teams; anything kept in Git and reviewed | Small or hand-written configurations, quick experiments |
-| Code review | One object per file, so diffs are small and clear | Many objects per file, so diffs are larger |
-| Merge conflicts | Rare (people edit different files) | More likely (people edit the same file) |
-| Rules to follow | Folder name and top-level key must match | Only the top-level key matters |
-| Typos in folder names | The file is silently skipped | Not possible |
-| Matches export | `filetree_version/` | `flat_version/` |
+* `common/` is read first, then `<env>/imports/`; within each, files are read in path order.
+* When several files define the same variable, lists are combined (so ten files that each define `controller_projects` give ten projects), mappings such as `gateway_settings` are merged (later files win per key), and anything else keeps the last value.
+* **Each object may be defined only once.** If the same object (for example a project with the same name and organization) appears in two places with different values, import stops before connecting to AAP and lists where each copy is. Keep one copy, or run `import.sh` with `--allow-duplicates` to import anyway (every copy is sent to AAP in order, so the last one wins). Copies that don't conflict (for example the same team exported under two names) are imported, with a warning.
+* Values can reference variables from your vaults, `vars.yml`, or any other file being imported, for example `"{{ vault_github_token }}"`.
 
-**If in doubt, choose filetree.** It scales better and is how exports are organized.
-
-### Switching layouts later
-
-1. Convert your files (or copy the other layout from a fresh export):
-
-    ```bash
-    # filetree -> flat
-    ansible-playbook filetree_to_flat.yml -e filetree_to_flat_base_path=orgs_vars/MyCompany/prod/imports \
-      -e filetree_to_flat_output_path=orgs_vars/MyCompany/prod/imports_flat
-    # flat -> filetree
-    ansible-playbook flat_to_filetree.yml -e flat_to_filetree_source_path=orgs_vars/MyCompany/prod/imports \
-      -e flat_to_filetree_output_path=orgs_vars/MyCompany/prod/imports_filetree
-    ```
-
-2. Replace `imports/` (and `common/`, if you use it) with the converted files.
-3. Change `flatten_output` in the environment's `vars.yml`.
-4. Confirm that `./import.sh <workspace> <env> -a --check` reports no unexpected changes.
-
-Environments in the same workspace share `common/`, so they should all use the same layout.
+To convert files between the two styles yourself, see [How-To: convert between flat and filetree files](HOW_TO.md#convert-between-flat-and-filetree-files).
 
 ---
 
@@ -198,9 +173,9 @@ Environments in the same workspace share `common/`, so they should all use the s
 
 **Export:** reading configuration from AAP into YAML files.
 
-**Filetree layout:** one folder per object type (`<type>.d/`), with files inside it. See [Folder Layout](FOLDER_LAYOUT.md).
+**Filetree style:** one folder per object type (`<type>.d/`), usually one file per object, as in an export's `filetree_version/`. See [Organizing your files](#organizing-your-files).
 
-**Flat layout:** YAML files anywhere under `imports/` and `common/`, each holding one or more object-type lists.
+**Flat style:** a few larger YAML files, each holding one or more object-type lists, as in an export's `flat_version/`. Import reads both styles, mixed or not.
 
 **Idempotent:** safe to run repeatedly; only differences are changed.
 

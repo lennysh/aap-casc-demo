@@ -33,7 +33,6 @@ company, team or lab (MyCompany -> dev, qa, prod). It doesn't have to match an A
 
 Options (all optional; anything not given is asked for interactively):
   --version <ver>       AAP version (e.g. 2.6)
-  --filetree | --flat   Import layout (default: filetree). See docs/CONCEPTS.md
   --hostname <url>      AAP URL or hostname (the platform gateway on 2.5+)
   --username <user>     AAP username; the password is read from \$AAP_PASSWORD or prompted
                         (set \$AAP_TOKEN instead to use an existing OAuth token)
@@ -45,7 +44,7 @@ Options (all optional; anything not given is asked for interactively):
                         .vault_pass/<workspace>.txt or a shared vault password file provides it)
   -h, --help            Show this help
 
-When adding an environment to a workspace that already has one, the AAP version, layout,
+When adding an environment to a workspace that already has one, the AAP version,
 certificate setting and username of the most recently set up environment are offered as
 defaults (and used with --yes unless given).
 
@@ -65,15 +64,14 @@ warn() { printf '  ⚠️  %s\n' "$*"; }
 die()  { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
 # --- Arguments ------------------------------------------------------------------------------
-org="" env="" opt_version="" opt_layout="" opt_hostname="" opt_username=""
+org="" env="" opt_version="" opt_hostname="" opt_username=""
 opt_verify_certs="" opt_skip_test=false assume_yes=false opt_org_filter=""
 choice=""
 positional=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --version)          [[ -n "${2:-}" ]] || die "--version needs a value"; opt_version=$2; shift 2 ;;
-        --flat)             opt_layout=flat; shift ;;
-        --filetree)         opt_layout=filetree; shift ;;
+        --flat|--filetree)  shift ;;  # no longer needed (import reads any layout); accepted for old scripts
         --hostname)         [[ -n "${2:-}" ]] || die "--hostname needs a value"; opt_hostname=$2; shift 2 ;;
         --username)         [[ -n "${2:-}" ]] || die "--username needs a value"; opt_username=$2; shift 2 ;;
         --no-verify-certs)  opt_verify_certs=false; shift ;;
@@ -423,7 +421,7 @@ rel_env="orgs_vars/$org/$env"
 rel_common="orgs_vars/$org/common"
 
 # Most recently set up other environment in this workspace, used for defaults.
-sibling_env="" sib_version="" sib_layout=""
+sibling_env="" sib_version=""
 if [[ ! -f "$env_vars_file" && -d "$org_base_dir" ]]; then
     # Complete environments (with a vault) first, newest first.
     while IFS= read -r d; do
@@ -431,11 +429,6 @@ if [[ ! -f "$env_vars_file" && -d "$org_base_dir" ]]; then
         sibling_env=$(basename "$d")
         sib_version=$(sed -n 's/^CASC_AAP_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$d/vars.env")
         [[ -d "$script_vars_dir/$sib_version" ]] || sib_version=""
-        if [[ -f "$d/vars.yml" ]] && grep -Eq '^flatten_output:[[:space:]]*(true|True|yes)' "$d/vars.yml"; then
-            sib_layout=flat
-        elif [[ -f "$d/vars.yml" ]]; then
-            sib_layout=filetree
-        fi
         break
     done < <(find "$org_base_dir" -mindepth 2 -maxdepth 2 -name vars.env -printf '%T@ %h\n' 2>/dev/null | sort -rn | cut -d' ' -f2- \
              | while IFS= read -r d; do if [[ -f "$d/vault.yml" ]]; then echo "0 $d"; else echo "1 $d"; fi; done \
@@ -454,38 +447,21 @@ ensure_folders() {
     done
 }
 
-# Read the import layout from vars.yml (source of truth), falling back to vars.env.
-current_layout() {
-    if [[ -f "$vars_file" ]] && grep -Eq '^flatten_output:[[:space:]]*(true|True|yes)' "$vars_file"; then
-        say flat
-    elif [[ -f "$vars_file" ]]; then
-        say filetree
-    elif [[ "${FLATTEN_OUTPUT:-false}" == "true" ]]; then
-        say flat
-    else
-        say filetree
-    fi
-}
-
+# Creates imports/, exports/ and common/, plus empty <type>.d/ folders as a guide. Import reads
+# every YAML file under imports/ and common/ whatever the folder structure, so they're optional.
 create_type_folders() {
-    local layout=$1 script_vars_file="$script_vars_dir/$CASC_AAP_VERSION/vars.env" f
+    local script_vars_file="$script_vars_dir/$CASC_AAP_VERSION/vars.env" f
     created_folders=0
     ensure_folders "$imports_dir" "$exports_dir" "$common_dir"
-    if [[ "$layout" != "flat" ]]; then
-        [[ -f "$script_vars_file" ]] || die "Unknown AAP version '$CASC_AAP_VERSION' (no $script_vars_file)."
-        aap_folders_needed=()
-        # shellcheck source=/dev/null
-        source "$script_vars_file"
-        for f in "${aap_folders_needed[@]}"; do
-            ensure_folders "$imports_dir/$f" "$common_dir/$f"
-        done
-    fi
+    [[ -f "$script_vars_file" ]] || die "Unknown AAP version '$CASC_AAP_VERSION' (no $script_vars_file)."
+    aap_folders_needed=()
+    # shellcheck source=/dev/null
+    source "$script_vars_file"
+    for f in "${aap_folders_needed[@]}"; do
+        ensure_folders "$imports_dir/$f" "$common_dir/$f"
+    done
     if (( created_folders > 0 )); then
-        if [[ "$layout" == "flat" ]]; then
-            info "Created $created_folders folder(s) ($rel_env/imports, exports and $rel_common)"
-        else
-            info "Created $created_folders folder(s) for the filetree layout in $rel_env/imports and $rel_common"
-        fi
+        info "Created $created_folders folder(s) in $rel_env (imports/, exports/) and $rel_common"
     fi
 }
 
@@ -494,14 +470,12 @@ latest_export() {
 }
 
 print_next_steps() {
-    local layout=$1 copy_from=filetree_version
-    [[ "$layout" == "flat" ]] && copy_from=flat_version
     say ""
     say "Next steps:"
     say "  1. Export the current configuration:"
     say "       ./export.sh $org $env -a"
     say "  2. Copy what you want to manage into imports/ (or $rel_common/ to share it):"
-    say "       cp -r $rel_env/exports/<export-folder>/$copy_from/* $rel_env/imports/"
+    say "       cp -r $rel_env/exports/<export-folder>/filetree_version/* $rel_env/imports/"
     say "  3. Add the secret placeholders ({{ vault_... }}) to your vault:"
     say "       ./vault-edit.sh $org $env"
     say "  4. Dry run, then import:"
@@ -826,14 +800,12 @@ update_env_vault() {
 if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports_dir" && -d "$exports_dir" ]]; then
     # shellcheck source=/dev/null
     source "$env_vars_file"
-    layout=$(current_layout)
-    create_type_folders "$layout"
+    create_type_folders
     show_status() {
         local import_files last filter
         say ""
         say "Environment '$env' in workspace '$org' is set up:"
         say "  AAP version:   ${CASC_AAP_VERSION:-unknown}"
-        say "  Import layout: $layout (flatten_output in $rel_env/vars.yml)"
         filter=$(current_org_filter)
         if [[ -n "$filter" ]]; then
             say "  Export scope:  AAP organization '$filter' (organization_filter)"
@@ -900,7 +872,7 @@ if [[ -f "$env_vars_file" && -f "$vars_file" && -f "$vault_file" && -d "$imports
                 fi
                 say "" ;;
             "Show next steps")
-                print_next_steps "$layout" ;;
+                print_next_steps ;;
             *)
                 offer_bash_completion
                 exit 0 ;;
@@ -945,44 +917,6 @@ else
     info "AAP $CASC_AAP_VERSION"
 fi
 
-# --- Step: import layout ----------------------------------------------------------------------
-step "Import layout"
-if [[ -f "$vars_file" ]]; then
-    layout=$(current_layout)
-    info "Using the $layout layout from $rel_env/vars.yml"
-elif [[ -n "$opt_layout" ]]; then
-    layout=$opt_layout
-    info "${layout^} layout"
-elif interactive; then
-    say "How should configuration files be organized for import? (Exports always contain both.)"
-    say ""
-    say "  1) Filetree (recommended)"
-    say "       One folder per object type, usually one file per object:"
-    say "         imports/controller_projects.d/Network Playbooks.yml"
-    say "         imports/controller_job_templates.d/Backup Configs.yml"
-    say "       Easy to review and merge in Git; matches how exports are organized."
-    say ""
-    say "  2) Flat"
-    say "       Any YAML files, anywhere under imports/ and common/; folder names don't matter:"
-    say "         imports/projects.yml       (contains controller_projects: [...])"
-    say "         imports/team-a/stuff.yml   (can contain several object types)"
-    say "       Handy for small or hand-written configurations."
-    say ""
-    say "  You can switch later with flatten_output in vars.yml. Details: docs/CONCEPTS.md#filetree-and-flat-layouts"
-    ask choice "Choose [1-2]" "$([[ "$sib_layout" == "flat" ]] && echo 2 || echo 1)"
-    case "$choice" in
-        2|f|flat) layout=flat ;;
-        *)        layout=filetree ;;
-    esac
-    info "${layout^} layout"
-elif [[ -n "$sib_layout" ]]; then
-    layout=$sib_layout
-    info "${layout^} layout (same as '$sibling_env')"
-else
-    layout=filetree
-    info "Filetree layout (default)"
-fi
-
 # --- Step: tools and collections --------------------------------------------------------------
 step "Checking tools"
 core_version=$(ansible --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
@@ -1023,18 +957,12 @@ fi
 step "Folders and settings"
 if [[ ! -f "$env_vars_file" ]]; then
     mkdir -p "$env_dir"
-    {
-        echo "CASC_AAP_VERSION=\"$CASC_AAP_VERSION\""
-        echo "FLATTEN_OUTPUT=$([[ "$layout" == "flat" ]] && echo true || echo false)"
-    } > "$env_vars_file"
+    echo "CASC_AAP_VERSION=\"$CASC_AAP_VERSION\"" > "$env_vars_file"
     info "Wrote $rel_env/vars.env"
 fi
-create_type_folders "$layout"
+create_type_folders
 if [[ ! -f "$vars_file" ]]; then
     cp "$vars_template_file" "$vars_file"
-    if [[ "$layout" == "flat" ]]; then
-        sed -i 's/^flatten_output: .*/flatten_output: true/' "$vars_file"
-    fi
     info "Wrote $rel_env/vars.yml (import options; see the comments inside)"
 fi
 
@@ -1126,8 +1054,8 @@ fi
 
 # --- Done --------------------------------------------------------------------------------------
 say ""
-say "✅ Environment '$env' in workspace '$org' is ready (AAP $CASC_AAP_VERSION, $layout layout)."
+say "✅ Environment '$env' in workspace '$org' is ready (AAP $CASC_AAP_VERSION)."
 say "   Edit connection details or secrets any time with: ./vault-edit.sh $org $env"
 say "   Check or update this environment later with:      ./start_here.sh $org $env"
 offer_bash_completion
-print_next_steps "$layout"
+print_next_steps

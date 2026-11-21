@@ -4,7 +4,7 @@
     controller_hostname: "{{ aap_hostname }}"
     controller_host: "{{ aap_hostname }}"
     controller_validate_certs: "{{ aap_validate_certs }}"
-    controller_oauthtoken: "{{ controller_token.token | default(vault_aap_token) }}"
+    controller_oauthtoken: "{{ controller_token_dict.token | default(vault_aap_token) }}"
   tags:
     - always
 

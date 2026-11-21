@@ -35,7 +35,7 @@ The environment is incomplete. Run `./start_here.sh <workspace> <env>` again; it
 Tags differ between AAP versions (for example `projects` on 2.4 vs. `controller_projects` on 2.5+). Run `./export.sh <workspace> <env>` or `./import.sh <workspace> <env>` without options to list the valid tags. See [Tags](VERSIONS_AND_COLLECTIONS.md#tags).
 
 **`Error: Missing option [-a|--all] or [-t|--tags]`**
-Tell the script what to process: `-a` for everything, or `-t "<tags>"`.
+Tell the script what to process: `-a` for everything, `-t "<tags>"`, or `-f <path>`.
 
 **`Invalid workspace name` / `Invalid environment name` / `'common' is reserved`**
 Names may contain letters, digits, `.`, `_` and `-`, and must start with a letter or digit. `common` can't be an environment name because it's the workspace's shared folder.
@@ -52,8 +52,8 @@ The workspace's password file holds the wrong password (for example, the vaults 
 **`The vault password in $CASC_VAULT_PASSWORD doesn't open ...`**
 `$CASC_VAULT_PASSWORD` holds a different workspace's password. Set the right one, or unset it to use a password file or the prompt.
 
-**I picked the wrong AAP version or layout in the wizard**
-Change `CASC_AAP_VERSION` in `orgs_vars/<workspace>/<env>/vars.env`, or `flatten_output` in `vars.yml`. Or delete the file and run `./start_here.sh <workspace> <env>` again to be asked again. If you change the version, re-run the wizard so it creates that version's folders.
+**I picked the wrong AAP version in the wizard**
+Change `CASC_AAP_VERSION` in `orgs_vars/<workspace>/<env>/vars.env`. Or delete the file and run `./start_here.sh <workspace> <env>` again to be asked again. If you change the version, re-run the wizard so it creates that version's folders.
 
 ## Setup wizard connection test
 
@@ -97,6 +97,22 @@ These appear when running `ansible-playbook` or `ansible-vault` directly, outsid
 **`'vault_...' is undefined`**
 A file references a secret placeholder that no vault defines. Add it to the environment vault (`./vault-edit.sh <workspace> <env>`) or the common vault (`./vault-edit.sh <workspace> common`). See [Handle secrets](HOW_TO.md#handle-secrets).
 
+With `-t`, only the selected object types are loaded, so an undefined variable under `-t X` is in X's definitions or in a helper variable they use. With `-a`, it could be in any file.
+
+**`Preflight: N of M object(s) can't be resolved, so nothing was sent to AAP`**
+Before connecting to AAP, import resolves every loaded object and lists each one that fails as `<variable> [<object>]: <error>`. Nothing has been changed in AAP. Usual causes: a vault secret that isn't defined yet (add it with `./vault-edit.sh`), a typo in a variable or helper name, an unknown filter, or a value AAP must receive literally (credential type injectors, see below) that isn't wrapped in `{%- raw -%}` or tagged `!unsafe`. To import other types while you finish these, use `-t` without them. `--skip-preflight` turns the check off (the import then fails when it reaches the broken object).
+
+**`'<name>' is undefined` in a credential type injector**
+Injector values such as `{{ api_key }}` are filled in by AAP when a job runs, not by Ansible during import, so Ansible must not template them. Wrap the value in `{%- raw -%}...{%- endraw -%}` or tag it `!unsafe`:
+
+```yaml
+injectors:
+  env:
+    OPNSENSE_API_KEY: !unsafe "{{ opnsense_api_key }}"
+```
+
+See the [credential type example](OBJECT_EXAMPLES.md#credential-types).
+
 ## Collections and ansible-core
 
 **`Error: Collections not found for AAP <version>`**
@@ -137,10 +153,9 @@ The account can't read (export) or change (import) some objects. Use an account 
 Check, in order:
 
 1. **Top-level key:** it must match the [Object Reference](FOLDER_LAYOUT.md#object-type-reference) exactly. Common mistakes are `controller_job_templates:` (should be `controller_templates:`), `controller_workflow_job_templates:` (should be `controller_workflows:`) and `controller_notification_templates:` (should be `controller_notifications:`).
-2. **Folder** (filetree layout): the file must be inside that type's `<type>.d/` folder (subfolders are fine).
-3. **Layout:** `flatten_output` in `vars.yml` must match how your files are laid out.
-4. **Location:** controller settings are read from `<env>/imports/controller_settings.d/` only, not `common/`. Files in `common/` are skipped when `import_common: false`.
-5. **Tags:** with `-t`, only those object types are imported. On AAP 2.5+, organizations, teams, users and applications use the `gateway_*` import tags.
+2. **Location:** the file must be under `<env>/imports/` or `common/` (any subfolder), end in `.yml` or `.yaml`, and neither the file nor any folder above it (inside `imports/` or `common/`) may start with `ignore_`. Files in `common/` are skipped when `import_common: false`.
+3. **Tags:** with `-t`, only those object types are loaded and imported; objects of other types are skipped (the run lists them). On AAP 2.5+, organizations, teams, users and applications use the `gateway_*` import tags.
+4. **Files:** with `-f`, only objects defined in the named files (or folders) are imported; objects in other files are skipped. The run lists the selected files.
 
 **`... does not exist` / `could not find <project/inventory/credential>`**
 An object refers to something that isn't in AAP yet. Import its dependencies first, or include their tags in the same run. Check spelling, and the `organization:` field for objects whose names are only unique per organization.
@@ -148,8 +163,24 @@ An object refers to something that isn't in AAP yet. Import its dependencies fir
 **A second copy of an object was created**
 Its `name:` changed. Objects are matched by name. To rename, use `new_name:` (see [Rename an object](HOW_TO.md#rename-an-object)), then delete the extra copy with `state: absent`.
 
-**The same organization, team or user appears twice in my files**
-That's fine. Entries with the same name (organization + name for teams and applications, username for users) are merged on import.
+**`N object(s) are defined more than once with different values`**
+Import found the same object (same type and identity, for example a project with the same name and organization) in more than one place, with different values, and stopped before connecting to AAP. The message lists each object, the fields that differ and every file that defines it. Usually a copy was left behind, for example in both `common/` and `<env>/imports/`, or in an old flat file next to the newer per-object files. Keep one copy and delete the others. With `-t`, only the selected types are checked, so the duplicate is in one of those; with `-f`, only objects from the named files; with `-a`, every file is checked. To import anyway, add `--allow-duplicates`: every copy is sent to AAP in order, so the last one (from `<env>/imports/`) wins; for organizations, teams, users and applications, the first one wins.
+
+**`N object(s) are defined more than once without conflicting values`**
+A warning, not an error: the copies agree, so import continues. For example, the same organization exported as both `aap_organizations` and `gateway_organizations`, or a team under both its AAP 2.4 and 2.5 names. Organizations, teams, users and applications are merged into one; for other types, consider deleting the extra copy.
+
+**`Could not read <file>` / `must contain variables`**
+A file under `imports/` or `common/` isn't valid YAML, or isn't a mapping of variables (`controller_projects: [...]`). Fix the file, or rename it (or its folder) to start with `ignore_` to skip it. With `-t`, a file that can't be read is only skipped (with a warning) when all its top-level keys are object types you didn't select. With `-f`, a file you didn't name is skipped (with a warning) when all its top-level keys are object variables; if it has helper variables (or no keys), it's still an error.
+
+**`<path> isn't one of the files import reads`**
+A path given with `-f` can't be imported. The message says why:
+
+* **It doesn't exist.** Paths are relative to `orgs_vars/<workspace>/` (for example `dev/imports/hosts.yml`), to the current directory, or absolute. Check spelling, and quote names with spaces.
+* **It's outside `common/` and `<env>/imports/`**, for example an export file under `<env>/exports/`. Copy it into `imports/` first, or check that `<env>` matches the folder.
+* **It's an `ignore_` file or inside an `ignore_` folder.** Rename it to import it.
+* **It isn't `.yml` / `.yaml`.**
+* **It's under `common/` while `import_common: false`.** Set `import_common: true` or move the file to `<env>/imports/`.
+* **It's a folder with no YAML files that import reads** (empty, or only `ignore_` / non-YAML files).
 
 **Dry run (`--check`) reports changes right after an export**
 Secrets always show as changed because AAP can't compare them. Some defaults differ between what AAP returns and what it accepts. Review the reported fields; if a field keeps changing, set it explicitly in your file.

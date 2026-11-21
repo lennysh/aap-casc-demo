@@ -4,13 +4,6 @@
 # Export only this AAP organization. Leave unset to export everything the AAP user can see.
 # organization_filter: 'Default'
 
-# Import layout:
-#   false (default): read the <type>.d/ folder layout (e.g. controller_projects.d/, aap_teams.d/).
-#   true:            read every YAML file under imports/ (and common/) recursively, wherever it is;
-#                    lists defined in several files are combined.
-# Export always writes both layouts (filetree_version/ and flat_version/).
-flatten_output: false
-
 # Export secrets as placeholder variables (e.g. "{{ vault_controller_credentials_x_password }}")
 # instead of AAP's "$encrypted$" marker. Define the placeholders in a vault before importing.
 secrets_as_variables: true

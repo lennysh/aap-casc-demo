@@ -32,15 +32,12 @@
 #   tags:
 #     - always
 
-- name: Set fact to store token dict
+# Read the token from the registered result rather than the top-level
+# `aap_token` fact the module injects (INJECT_FACTS_AS_VARS is deprecated).
+- name: Set facts to store token dict and token string
   ansible.builtin.set_fact:
-    aap_token_dict: "{{ aap_token }}"
-  tags:
-    - always
-
-- name: Set fact to store token
-  ansible.builtin.set_fact:
-    aap_token: "{{ aap_token.token }}"
+    aap_token_dict: "{{ authtoken_res.ansible_facts.aap_token }}"
+    aap_token: "{{ authtoken_res.ansible_facts.aap_token.token }}"
   tags:
     - always
 ...

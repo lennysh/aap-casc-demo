@@ -10,10 +10,52 @@ aap_validate_certs: "{{ vault_aap_validate_certs | default(lookup('env', 'AAP_VE
 # Set to true to skip that check, e.g. if every object defines all the affected fields.
 import_export_allow_unsupported_core: false
 
-# Cross-version variable aliases, applied on import (see tasks/import_var_aliases.yml).
+# Import fails before connecting to AAP when the same object (same type and identity fields,
+# see import_export_identity_keys) is defined more than once with different values, e.g. in
+# both common/ and <env>/imports/. Set to true (import.sh --allow-duplicates) to import anyway.
+import_export_allow_duplicates: false
+
+# Before connecting to AAP, import resolves every loaded object (Jinja variables, filters) and
+# fails with a list of everything that can't be resolved, so a missing variable can't stop the
+# import halfway through. Set to false (import.sh --skip-preflight) to skip the check.
+import_export_preflight: true
+
+# Import only the objects defined in these files or folders (absolute paths; import.sh -f sets
+# it). Helper variables and vaults are still read from every file. Empty = no file filter.
+import_export_only_files: []
+
+# Fields that identify an object for the duplicate check. Objects missing the first field
+# are not checked. Variables not listed use __default__.
+import_export_identity_keys:
+  __default__: [name, organization]
+  aap_organizations: [name]
+  controller_organizations: [name]
+  aap_user_accounts: [username]
+  controller_user_accounts: [username]
+  controller_credentials: [name, organization, credential_type]
+  controller_credential_types: [name]
+  controller_credential_input_sources: [target_credential, input_field_name]
+  controller_hosts: [name, inventory]
+  controller_groups: [name, inventory]
+  controller_inventory_sources: [name, inventory]
+  controller_schedules: [name, unified_job_template]
+  controller_instances: [hostname]
+  controller_instance_groups: [name]
+  gateway_authenticator_maps: [name, authenticator]
+  hub_collections: [name, namespace]
+
+# Variables never duplicate-checked (role assignments have no name; settings are not lists).
+import_export_skip_duplicate_check:
+  - controller_roles
+  - gateway_role_team_assignments
+  - gateway_role_user_assignments
+  - controller_settings
+  - gateway_settings
+
+# Cross-version variable aliases, applied on import (see action_plugins/casc_import_prepare.py).
 # Lets config exported from one AAP version be imported into another without edits:
-# any YAML file under common/ or <env>/imports/ that defines a `source` variable has its
-# items appended to `target` (after optional key renames) before dispatch runs.
+# when a file under common/ or <env>/imports/ defines a `source` variable, its items are
+# appended to `target` (after optional key renames) before dispatch runs.
 import_export_var_aliases:
   # AAP 2.4 import (infra.controller_configuration) also accepts 2.5+ names
   controller:
@@ -28,7 +70,7 @@ import_export_var_aliases:
   # AAP 2.5+ import (infra.aap_configuration) also accepts 2.4 names
   gateway:
     - {target: aap_organizations, source: controller_organizations}
-    # filetree_read already folds these in; needed for flattened mode (duplicates are merged)
+    # older 2.5+ exports wrote organizations to both (duplicates are merged)
     - {target: aap_organizations, source: gateway_organizations}
     - {target: aap_teams, source: controller_teams}
     - target: aap_user_accounts

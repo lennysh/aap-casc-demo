@@ -38,7 +38,7 @@ The pinned versions are in `collections/<version>/requirements.yml`:
 | `ansible.hub` | latest | latest | latest | `>=1.0.6` |
 
 * **Export** uses the `filetree_create` role (`infra.controller_configuration` on 2.4, `infra.aap_configuration_extended` on 2.5+).
-* **Import** uses `filetree_read` to load your files and `dispatch` to apply them in dependency order (`infra.controller_configuration` on 2.4; `infra.aap_configuration_extended` and `infra.aap_configuration` on 2.5+).
+* **Import** loads your files itself (any folder structure; see [Organizing your files](CONCEPTS.md#organizing-your-files)) and uses the collection's `dispatch` role to apply them in dependency order (`infra.controller_configuration` on 2.4; `infra.aap_configuration` on 2.5+).
 * AAP 2.5 uses `ansible.platform` 2.6 on purpose: `infra.aap_configuration` needs modules that first appeared there.
 
 To compare collection variables between the 2.4 and 2.5+ collections when writing configuration by hand, see the [Collection Variable Reference](MIGRATION_GUIDE_CONTROLLER_TO_AAP.md).
